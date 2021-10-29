@@ -1,0 +1,2 @@
+SessionID;Timestamp;Framecount;Email;DeviceID;SamplingFrequency;SessionProgram;SessionDuration;ProfileName;Age;Gender;Handedness;InjuryDate;ProfileGroup;ProfileID;SessionState;ParticipantID;testID
+c202fd6ad5a025fe9471d5dd4040451b;2021-10-15 10:05:08.2235;12295;slehm15@student.aau.dk;8e5d9160d612e355aca795bcdb6bdcae0fdcf352;0.0080;MirrorEffect;239.2046;Christoffer;26;Male;Right;NULL;ControlGroup;00dd56ed03df664d24f3f5d4cd4b77bd;Finished;0;0

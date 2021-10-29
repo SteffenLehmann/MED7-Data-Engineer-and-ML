@@ -1,0 +1,2 @@
+SessionID;Timestamp;Framecount;Email;DeviceID;SamplingFrequency;SessionProgram;SessionDuration;SessionState;ProfileName;Age;Gender;Handedness;InjuryDate;ProfileGroup;ProfileID;ParticipantID;testID
+0a3da314247a788f2575f8ff8effd27a;2021-10-15 09:58:50.1509;28399;biho@create.aau.dk;9d418989f3ee3ccdb923570a4db2f99875c395a1;NULL;MirrorEffect;239.2275;Finished;Bastian;26;Male;Right;NULL;NULL;c4955187251b7e802591c8106d07583b;0;0

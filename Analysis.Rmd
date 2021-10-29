@@ -1,0 +1,125 @@
+---
+title: "MED7_Analysis"
+output: 
+  html_document: default
+  pdf_document: default
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen=999)
+library(ggplot2)
+library(tidyverse)
+library(tidymodels)
+library(skimr)
+library(stringr)
+library(corrplot)
+library(RColorBrewer)
+library("PerformanceAnalytics")
+library("Hmisc")
+library(Rmisc)
+library(lubridate)
+library(ggbeeswarm)
+library(GGally)
+library(effsize)
+library(magrittr)
+library(dplyr)
+library(reticulate)
+
+flattenCorrMatrix <- function(cormat, pmat) {
+  ut <- upper.tri(cormat)
+  data.frame(
+    row = rownames(cormat)[row(cormat)[ut]],
+    column = rownames(cormat)[col(cormat)[ut]],
+    cor  =(cormat)[ut],
+    p = pmat[ut]
+    )
+}
+```
+
+```{r logData, echo=FALSE,message=F, warning=F,results='hide'}
+df <- list.files(path = "./physlogs", full.names = T) %>%
+map_dfr(read_csv, .id = "file_path") %>%
+group_by(file_path) %>%
+dplyr::mutate(Participant = group_indices())
+
+ds <- list.files(recursive = TRUE, path = "./wamlogs", pattern = "Sample.csv",full.names = T) %>%
+map_dfr(read_csv, .id = "file_path") %>%
+group_by(file_path) %>%
+dplyr::mutate(Participant = group_indices())
+
+
+dfSummary <- df %>% dplyr::group_by(Participant) %>%
+   select(Participant, EDA, IBI) 
+
+dsSummary <- ds %>% dplyr::group_by(Participant) %>% select(-Event, -Timestamp, -Framecount, -SessionID, -Email, -file_path)
+
+#dfSummary <-  dfSummary %>% merge(dsSummary, by = "Participant", all = T)
+
+
+```
+
+```{r Overview}
+ #dfSummary <- df %>%
+ #  dplyr::group_by(Participant) %>%
+ #  select(Participant, EDA, IBI)
+#dfSummary[dfSummary = 0] <- NA
+dfSummary %>%
+  select(-Participant) %>%
+   skim()
+
+dsSummary[dsSummary == "NULL"] <- NA
+dsSummary %>%
+  select(-Participant) %>%
+   skim()
+
+```
+
+
+```{python}
+import matplotlib.pyplot as plt
+from scipy import stats as sc
+import pandas as pd
+
+#py_dfSummary = r.dfSummary
+#x = py_dfSummary["EDA"]
+#y = py_dfSummary["IBI"]
+#plt.scatter(x, y)
+#plt.show()
+
+py_dsSummary = r.dsSummary
+x2 = py_dsSummary["RightControllerPosWorldX"]
+y2 = py_dsSummary["RightControllerPosWorldY"]
+users = py_dsSummary["Participant"]
+plt.scatter(x2, y2)
+plt.show()
+
+slope, intercept, p, r2, std_err = sc.linregress(x2, y2)
+
+def lr(x2):
+  return slope * x2 + intercept
+
+mymodel = list(map(lr, x2))
+
+p_df = pd.DataFrame(x2, y2, users)
+fig, ax = plt.subplots()
+bp = p_df.groupby("users").plot(kind="kde", ax=ax)
+
+
+plt.scatter(x2, y2)
+plt.plot(x2, mymodel)
+plt.show()
+
+```
+
+```{python}
+import numpy as np
+my_python_array = np.array([2,4,6,8])
+for item in my_python_array:
+    print(item)
+    
+exit
+```
+
