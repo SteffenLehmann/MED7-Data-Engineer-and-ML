@@ -1,0 +1,2 @@
+SessionID;Timestamp;Framecount;Email;DeviceID;SamplingFrequency;SessionProgram;SessionDuration;ProfileName;Age;Gender;Handedness;InjuryDate;ProfileGroup;ProfileID;SessionState;ParticipantID;testID
+288968600bdef45378e6b2942b10f245;2021-11-12 10:18:36.4180;60147;steffen@98243646.dk;403414062f7b377dfd3cee51fdb6a868b8b511a8;0.0080;MED7 R (R);630.0135;test;22;Male;Right;NULL;ControlGroup;992b1723575f0aa0dfd43bc3c757dfcd;Finished;0;0
