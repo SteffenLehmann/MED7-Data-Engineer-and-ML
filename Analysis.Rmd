@@ -40,26 +40,20 @@ flattenCorrMatrix <- function(cormat, pmat) {
 ```
 
 ```{r logData, echo=FALSE,message=F, warning=F,results='hide'}
-df <- list.files(path = "./physlogs", full.names = T) %>%
+df <- list.files(path = "./MED7 Eval data Physiological", full.names = T) %>%
 map_dfr(read_csv, .id = "file_path") %>%
 group_by(file_path) %>%
-dplyr::mutate(Participant = group_indices())
+dplyr::mutate(ParticipantID = group_indices())
 
 ds <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Sample.csv",full.names = T) %>%
 map_dfr(read_csv, .id = "file_path") %>%
 group_by(file_path) %>%
-dplyr::mutate(Participant = group_indices())
-
-ds <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Event.csv",full.names = T) %>%
-map_dfr(read_csv, .id = "file_path") %>%
-group_by(file_path) %>%
-dplyr::mutate(Participant = group_indices())
+dplyr::mutate(ParticipantID = group_indices())
 
 
-dfSummary <- df %>% dplyr::group_by(Participant) %>%
-   select(Participant, EDA, IBI) 
+dfSummary <- df %>% dplyr::group_by(file_path) %>% select(file_path, EDA, IBI, -ParticipantID) 
 
-dsSummary <- ds %>% dplyr::group_by(Participant) %>% select(-Framecount, -SessionID, -Email, -ParticipantId, -TestId, -PlayedPattern)
+dsSummary <- ds %>% dplyr::group_by(ParticipantID) #%>% select(-Event, -Timestamp, -Framecount, -SessionID, -Email, -file_path)
 
 #dfSummary <-  dfSummary %>% merge(dsSummary, by = "Participant", all = T)
 
