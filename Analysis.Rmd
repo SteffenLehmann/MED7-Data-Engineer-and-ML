@@ -39,44 +39,84 @@ flattenCorrMatrix <- function(cormat, pmat) {
 }
 ```
 
+```{r test, echo=FALSE,message=F, warning=F,results='hide'}
+
+
+
+```
+
 ```{r logData, echo=FALSE,message=F, warning=F,results='hide'}
-df <- list.files(path = "./MED7 Eval data Physiological", full.names = T) %>%
+
+df_questionnaire <- read.table("Questionnaire_data.csv", header=TRUE, fill = FALSE, sep=",")
+
+df_physiological <- list.files(path = "./MED7 Eval data Physiological", full.names = T) %>%
 map_dfr(read_csv, .id = "file_path") %>%
 group_by(file_path) %>%
 dplyr::mutate(ParticipantID = group_indices())
 
-ds <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Sample.csv",full.names = T) %>%
+df_sample <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Sample.csv",full.names = T) %>%
 map_dfr(read_csv, .id = "file_path") %>%
 group_by(file_path) %>%
 dplyr::mutate(ParticipantID = group_indices())
 
-ds <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Event.csv",full.names = T) %>%
+df_event <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Event.csv",full.names = T) %>%
 map_dfr(read_csv, .id = "file_path") %>%
 group_by(file_path) %>%
 dplyr::mutate(ParticipantID = group_indices())
 
+questionnaire_Summary <- df_questionnaire %>% dplyr::group_by(Participant) %>% select(-Notes ) %>% na.omit()
 
-dfSummary <- df %>% dplyr::group_by(file_path) %>% select(file_path, EDA, IBI, -ParticipantID) 
+physiological_Summary <- df_physiological %>% dplyr::group_by(file_path) %>% select(file_path, EDA, IBI, -ParticipantID) 
 
-dsSummary <- ds %>% dplyr::group_by(ParticipantID) %>% select(-Framecount, -SessionID, -Email, -ParticipantId, -TestId)
+sample_Summary <- df_sample %>% dplyr::group_by(file_path) %>% select(-Framecount, -SessionID, -Email)
 
+event_Summary <- df_event %>% dplyr::group_by(ParticipantID) %>% select(-Framecount, -SessionID, -Email, -ParticipantId, -TestId, -PlayedPattern)
 #dfSummary <-  dfSummary %>% merge(dsSummary, by = "Participant", all = T)
 
 
 ```
 
+```{r Pre-processing of Performance, echo=FALSE,message=F, warning=F,results='hide'}
+#Performance table for overview
+Performance <- table(event_Summary$Event,  event_Summary$file_path)
+Performance = t(Performance)
+Performance <- as.data.frame.matrix(Performance)
+
+#Added performance from the Event column to event_Summary
+#https://www.marsja.se/r-add-column-to-dataframe-based-on-other-columns-conditions-dplyr/
+
+#spawns
+event_Summary <- event_Summary %>% mutate(SpawnedMole =  case_when(Event == 'Mole Spawned' ~ "1"))
+event_Summary <- event_Summary %>% mutate(SpawnedFakeMole =  case_when(Event == 'Fake Mole Spawned' ~ "1"))
+#Shots
+event_Summary <- event_Summary %>% mutate(Shots =  case_when(Event == 'Pointer Shoot' ~ "1"))
+#Hit and misses
+event_Summary <- event_Summary %>% mutate(Misses =  case_when(Event == 'Mole Missed' ~ "1"))
+event_Summary <- event_Summary %>% mutate(Hits =  case_when(Event == 'Mole Hit' ~ "1"))
+event_Summary <- event_Summary %>% mutate(RedHit =  case_when(Event == 'Fake Mole Hit' ~ "1"))
+#Expired mole
+event_Summary <- event_Summary %>% mutate(Mole_Expired =  case_when(Event == 'Mole Expired' ~ "1"))
+event_Summary <- event_Summary %>% mutate(Fake_Mole_Expired =  case_when(Event == 'Fake Mole Expired' ~ "1"))
+
+
+#Test dataframe
+#test1 <- event_Summary %>% dplyr::group_by(file_path) %>% select(Event, SpawnedMole, SpawnedFakeMole, Shots, Misses, Hits, RedHit, Mole_Expired,  Fake_Mole_Expired)
+
+#computing performance metrics per participant
+#TODO : Amount of shots, Amount of Hits, Number of Spawned Moles, Moles pr. Sec, missed Shots, Moles Missed
+
+
+```
+
+
 ```{r Overview}
- #dfSummary <- df %>%
- #  dplyr::group_by(Participant) %>%
- #  select(Participant, EDA, IBI)
-#dfSummary[dfSummary = 0] <- NA
-dfSummary %>%
-  select(-Participant) %>%
+physiological_Summary  %>%
+  select(-file_path) %>%
    skim()
 
-dsSummary[dsSummary == "NULL"] <- NA
-dsSummary %>%
-  select(-Participant) %>%
+#sample_Summary[sample_Summary == "NULL"] <- NA
+sample_Summary %>%
+  select(-file_path) %>%
    skim()
 
 ```
