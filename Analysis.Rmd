@@ -50,10 +50,15 @@ map_dfr(read_csv, .id = "file_path") %>%
 group_by(file_path) %>%
 dplyr::mutate(ParticipantID = group_indices())
 
+ds <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Event.csv",full.names = T) %>%
+map_dfr(read_csv, .id = "file_path") %>%
+group_by(file_path) %>%
+dplyr::mutate(ParticipantID = group_indices())
+
 
 dfSummary <- df %>% dplyr::group_by(file_path) %>% select(file_path, EDA, IBI, -ParticipantID) 
 
-dsSummary <- ds %>% dplyr::group_by(ParticipantID) #%>% select(-Event, -Timestamp, -Framecount, -SessionID, -Email, -file_path)
+dsSummary <- ds %>% dplyr::group_by(ParticipantID) %>% select(-Framecount, -SessionID, -Email, -ParticipantId, -TestId)
 
 #dfSummary <-  dfSummary %>% merge(dsSummary, by = "Participant", all = T)
 
