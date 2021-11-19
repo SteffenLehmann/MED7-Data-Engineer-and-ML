@@ -31,13 +31,20 @@ library(raster)
 library(sf)
 ```
 
+
+
 ```{r logData, echo=FALSE,message=F, warning=F,results='hide'}
-df.physio <- list.files(path = "./MED7 Eval data Physiological", full.names = T) %>%
+df_questionnaire <- read.table("Questionnaire_data.csv", header=TRUE, fill = FALSE, sep=",")
+
+df_physiological <- list.files(path = "./MED7 Eval data Physiological", full.names = T) %>%
+
 map_dfr(read_csv, .id = "file_path") %>%
 group_by(file_path) %>%
 dplyr::mutate(ParticipantID = group_indices())
 
-df.sample <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Sample.csv",full.names = T) %>%
+
+df_sample <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Sample.csv",full.names = T) %>%
+
 map_dfr(read_csv, .id = "file_path") %>%
 group_by(file_path) %>%
 dplyr::mutate(ParticipantID = group_indices())
@@ -47,7 +54,9 @@ df.sample <- df.sample %>% mutate(
 df.sample <- df.sample %>% dplyr::select(-Timestamp, -Framecount, -SessionID, -Email, -Event, -ParticipantID)
 df.sample[df.sample == 'NULL'] <- NA
 
-df.event <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Event.csv",full.names = T) %>%
+
+df_event <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Event.csv",full.names = T) %>%
+
 map_dfr(read_csv, .id = "file_path") %>%
 group_by(file_path) %>%
 dplyr::mutate(ParticipantID = group_indices())
@@ -57,23 +66,80 @@ df.event <- df.event %>% mutate(
 df.event <- df.event %>% dplyr::select(-Framecount, -SessionID, -Email, -ParticipantID, -Timestamp)
 df.event[df.event == 'NULL'] <- NA
 
+questionnaire_Summary <- df_questionnaire %>% dplyr::group_by(Participant) %>% select(-Notes ) %>% na.omit()
 
-physiosummary <- df.physio %>% dplyr::group_by(file_path) %>%  dplyr::select(file_path, EDA, IBI, -ParticipantID, TimeStamp) 
-samplesummary <- df.sample %>% dplyr::group_by(file_path)
-eventsummary <- df.event %>% dplyr::group_by(file_path)
+
+physiological_Summary <- df_physiological %>% dplyr::group_by(file_path) %>% select(file_path, EDA, IBI, -ParticipantID) 
+
+sample_Summary <- df_sample %>% dplyr::group_by(file_path) %>% select(-Framecount, -SessionID, -Email)
+
+event_Summary <- df_event %>% dplyr::group_by(ParticipantID) %>% select(-Framecount, -SessionID, -Email, -ParticipantId, -TestId, -PlayedPattern)
+#dfSummary <-  dfSummary %>% merge(dsSummary, by = "Participant", all = T)
+```
+
+```{r Pre-processing of Performance, echo=FALSE,message=F, warning=F,results='hide'}
+#Performance table for overview
+Performance <- table(event_Summary$Event,  event_Summary$file_path)
+Performance = t(Performance)
+Performance <- as.data.frame.matrix(Performance)
+
+#Added performance from the Event column to event_Summary
+#https://www.marsja.se/r-add-column-to-dataframe-based-on-other-columns-conditions-dplyr/
+#TODO For loop this
+#Performance_columns <- c('SpawnedMole', 'SpawnedFakeMole', 'Shots', 'Misses', 'Hits', 'RedHit', 'Mole_Expired', 'Fake_Mole_Expired')
+#Column_data <- c('Mole Spawned', 'Fake Mole Spawned', 'Pointer Shoot', 'Mole Missed', 'Mole Hit', 'Fake Mole Hit', 'Mole Expired', 'Fake Mole Expired')
+
+#for (i in 1:length(Performance_columns))
+#  for (j in 1:length(Column_data))
+#    event_Summary <- event_Summary %>% mutate(Performance_columns[i] <-  case_when(Event == Column_data[j] ~ 1))
+#spawns
+event_Summary <- event_Summary %>% mutate(SpawnedMole =  case_when(Event == 'Mole Spawned' ~ 1))
+event_Summary <- event_Summary %>% mutate(SpawnedFakeMole =  case_when(Event == 'Fake Mole Spawned' ~ 1))
+#Shots
+event_Summary <- event_Summary %>% mutate(Shots =  case_when(Event == 'Pointer Shoot' ~ 1))
+#Hit and misses
+event_Summary <- event_Summary %>% mutate(Misses =  case_when(Event == 'Mole Missed' ~ 1))
+event_Summary <- event_Summary %>% mutate(Hits =  case_when(Event == 'Mole Hit' ~ 1))
+event_Summary <- event_Summary %>% mutate(RedHit =  case_when(Event == 'Fake Mole Hit' ~ 1))
+#Expired mole
+event_Summary <- event_Summary %>% mutate(Mole_Expired =  case_when(Event == 'Mole Expired' ~ 1))
+event_Summary <- event_Summary %>% mutate(Fake_Mole_Expired =  case_when(Event == 'Fake Mole Expired' ~ 1))
+
+#TODO : missed Shots
+#event_Summary <- event_Summary %>% mutate(MissedShot = Hits-Shots)
+
+#TODO : Moles Missed
+
+
+
+```
+
+```{r Sliding Window prototype, echo=FALSE,message=F, warning=F,results='hide'}
+test1 <- event_Summary %>% dplyr::group_by(file_path) %>% select(Event, SpawnedMole, SpawnedFakeMole, Shots, Misses, Hits, RedHit, Mole_Expired,  Fake_Mole_Expired)
+
+#TODO : Compute the size based on the time column
+size <- 161 # size of window ((3386/630)*30) which should be 30 sec
+len <- nrow(test1) - size + 1 # number of sliding windows to perform 
+
+test1 <- test1 %>% replace(is.na(.), 0)
+
+sumsmatrix <- apply(test1, 2, function(x)                   
+                     cumsum(x)[size:nrow(test1)] - c(0,cumsum(x)[1:(len-1)]))
+
+
+
 
 ```
 
 ```{r Overview}
- #dfSummary <- df %>%
- #  dplyr::group_by(Participant) %>%
- #  select(Participant, EDA, IBI)
-#dfSummary[dfSummary = 0] <- NA
-physiosummary  %>%
+samplesummary %>%
+physiological_Summary  %>%
   select(-file_path) %>%
    skim()
 
-samplesummary %>%
+#sample_Summary[sample_Summary == "NULL"] <- NA
+sample_Summary %>%
+
   select(-file_path) %>%
    skim()
 
