@@ -48,11 +48,11 @@ df_sample <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "S
 map_dfr(read_csv, .id = "file_path") %>%
 group_by(file_path) %>%
 dplyr::mutate(ParticipantID = group_indices())
-df.sample <- df.sample %>% mutate(
+df_sample <- df_sample %>% mutate(
                     minute = minute(Timestamp),
                     second = second(Timestamp))
-df.sample <- df.sample %>% dplyr::select(-Timestamp, -Framecount, -SessionID, -Email, -Event, -ParticipantID)
-df.sample[df.sample == 'NULL'] <- NA
+df_sample <- df_sample %>% dplyr::select(-Framecount, -SessionID, -Email, -Event, -ParticipantID, -Timestamp)
+df_sample[df_sample == 'NULL'] <- NA
 
 
 df_event <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Event.csv",full.names = T) %>%
@@ -60,20 +60,20 @@ df_event <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Ev
 map_dfr(read_csv, .id = "file_path") %>%
 group_by(file_path) %>%
 dplyr::mutate(ParticipantID = group_indices())
-df.event <- df.event %>% mutate(
+df_event <- df_event %>% mutate(
                     minute = minute(Timestamp),
                     second = second(Timestamp))
-df.event <- df.event %>% dplyr::select(-Framecount, -SessionID, -Email, -ParticipantID, -Timestamp)
-df.event[df.event == 'NULL'] <- NA
+df_event <- df_event %>% dplyr::select(-Framecount, -SessionID, -Email, -ParticipantID, -Timestamp)
+df_event[df_event == 'NULL'] <- NA
 
-questionnaire_Summary <- df_questionnaire %>% dplyr::group_by(Participant) %>% select(-Notes ) %>% na.omit()
+questionnaire_Summary <- df_questionnaire %>% dplyr::group_by(Participant) %>% dplyr::select(-Notes ) %>% na.omit()
 
 
-physiological_Summary <- df_physiological %>% dplyr::group_by(file_path) %>% select(file_path, EDA, IBI, -ParticipantID) 
+physiological_Summary <- df_physiological %>% dplyr::group_by(file_path) %>% dplyr::select(file_path, EDA, IBI, -ParticipantID) 
 
-sample_Summary <- df_sample %>% dplyr::group_by(file_path) %>% select(-Framecount, -SessionID, -Email)
+sample_Summary <- df_sample %>% dplyr::group_by(file_path)
 
-event_Summary <- df_event %>% dplyr::group_by(ParticipantID) %>% select(-Framecount, -SessionID, -Email, -ParticipantId, -TestId, -PlayedPattern)
+event_Summary <- df_event %>% dplyr::group_by(file_path) %>% dplyr::select(-TestId, -PlayedPattern)
 #dfSummary <-  dfSummary %>% merge(dsSummary, by = "Participant", all = T)
 ```
 
@@ -115,7 +115,7 @@ event_Summary <- event_Summary %>% mutate(Fake_Mole_Expired =  case_when(Event =
 ```
 
 ```{r Sliding Window prototype, echo=FALSE,message=F, warning=F,results='hide'}
-test1 <- event_Summary %>% dplyr::group_by(file_path) %>% select(Event, SpawnedMole, SpawnedFakeMole, Shots, Misses, Hits, RedHit, Mole_Expired,  Fake_Mole_Expired)
+test1 <- event_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(Event, SpawnedMole, SpawnedFakeMole, Shots, Misses, Hits, RedHit, Mole_Expired,  Fake_Mole_Expired)
 
 #TODO : Compute the size based on the time column
 size <- 161 # size of window ((3386/630)*30) which should be 30 sec
@@ -132,7 +132,7 @@ sumsmatrix <- apply(test1, 2, function(x)
 ```
 
 ```{r Overview}
-samplesummary %>%
+sample_Summary %>%
 physiological_Summary  %>%
   select(-file_path) %>%
    skim()
@@ -144,11 +144,12 @@ sample_Summary %>%
    skim()
 
 ```
+
 ```{r Hand tracking data}
-right.df <- data.frame( x = samplesummary$RightControllerPosWorldX,
-y = samplesummary$RightControllerPosWorldY,
-z = samplesummary$RightControllerPosWorldZ,
-group = samplesummary$file_path)
+right.df <- data.frame( x = sample_Summary$RightControllerPosWorldX,
+y = sample_Summary$RightControllerPosWorldY,
+z = sample_Summary$RightControllerPosWorldZ,
+group = sample_Summary$file_path)
 right.df <- st_as_sf(right.df,coords = c("x","y","z"),remove = F)
 right.df <- right.df %>%
   group_by(group) %>%
@@ -156,12 +157,12 @@ right.df <- right.df %>%
     lead = geometry[(dplyr::row_number()) + 1],
     dist = st_distance(geometry, lead, by_element = T),
   )
-samplesummary$righthanddist <- right.df$dist
+sample_Summary$righthanddist <- right.df$dist
 
-left.df <- data.frame( x = samplesummary$LeftControllerPosTravelX,
-y = samplesummary$LeftControllerPosWorldY,
-z = samplesummary$LeftControllerPosWorldZ,
-group = samplesummary$file_path)
+left.df <- data.frame( x = sample_Summary$LeftControllerPosTravelX,
+y = sample_Summary$LeftControllerPosWorldY,
+z = sample_Summary$LeftControllerPosWorldZ,
+group = sample_Summary$file_path)
 left.df <- st_as_sf(left.df,coords = c("x","y","z"),remove = F)
 left.df <- left.df %>%
   group_by(group) %>%
@@ -169,14 +170,14 @@ left.df <- left.df %>%
     lead = geometry[(dplyr::row_number()) + 1],
     dist = st_distance(geometry, lead, by_element = T),
   )
-samplesummary$lefthanddist <- left.df$dist
+sample_Summary$lefthanddist <- left.df$dist
 ```
 
 ```{r Head tracking data}
-head.df <- data.frame( x = samplesummary$HeadCameraPosWorldX,
-y = samplesummary$HeadCameraPosWorldY,
-z = samplesummary$HeadCameraPosWorldZ,
-group = samplesummary$file_path)
+head.df <- data.frame( x = sample_Summary$HeadCameraPosWorldX,
+y = sample_Summary$HeadCameraPosWorldY,
+z = sample_Summary$HeadCameraPosWorldZ,
+group = sample_Summary$file_path)
 
 head.df <- st_as_sf(head.df,coords = c("x","y","z"),remove = F)
 
@@ -187,7 +188,7 @@ head.df <- head.df %>%
     dist = st_distance(geometry, lead, by_element = T),
   )
 
-samplesummary$headdist <- head.df$dist
+sample_Summary$headdist <- head.df$dist
 ```
 
 ```{python}
@@ -201,7 +202,7 @@ import pandas as pd
 #plt.scatter(x, y)
 #plt.show()
 
-py_dsSummary = r.samplesummary
+py_dsSummary = r.sample_Summary
 x2 = py_dsSummary["RightControllerPosWorldX"]
 y2 = py_dsSummary["RightControllerPosWorldY"]
 users = py_dsSummary["Participant"]
