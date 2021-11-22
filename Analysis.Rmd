@@ -3,6 +3,7 @@ title: "MED7_Analysis"
 output: 
   html_document: default
   pdf_document: default
+  github_document: default
 editor_options:
   chunk_output_type: inline
 ---
@@ -32,7 +33,12 @@ library(sf)
 library(runner)
 ```
 
-
+```{python Loading packages, include=FALSE}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy import stats as sc
+```
 
 ```{r logData, echo=FALSE,message=F, warning=F,results='hide'}
 df_questionnaire <- read.table("Questionnaire_data.csv", header=TRUE, fill = FALSE, sep=",")
@@ -137,6 +143,20 @@ sumsmatrix <- apply(test1, 2, function(x)cumsum(x)[size:nrow(test1)] - c(0,cumsu
 
 ```
 
+```{python Sliding Window prototype in Python, include=FALSE}
+py_test1 = r.test1
+test1 = py_test1
+
+test1["Timestamp"] = pd.to_datetime(test1["Timestamp"]) # Convert column type to be datetime
+indexed_test1 = test1.set_index(["Timestamp"])           # Create a datetime index
+indexed_test1.rolling(100)                             # Create rolling windows
+indexed_test1.rolling(100).mean()                      # Then apply functions to rolling windows
+
+
+```
+
+
+
 ```{r Overview}
 sample_Summary %>%
 physiological_Summary  %>%
@@ -198,9 +218,7 @@ sample_Summary$headdist <- head.df$dist
 ```
 
 ```{python}
-import matplotlib.pyplot as plt
-from scipy import stats as sc
-import pandas as pd
+
 
 #py_dfSummary = r.dfSummary
 #x = py_dfSummary["EDA"]
@@ -234,7 +252,6 @@ plt.show()
 ```
 
 ```{python}
-import numpy as np
 my_python_array = np.array([2,4,6,8])
 for item in my_python_array:
     print(item)
