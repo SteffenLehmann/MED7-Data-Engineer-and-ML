@@ -1,8 +1,8 @@
 ---
 title: "MED7_Analysis"
 output: 
-  html_document: default
   pdf_document: default
+  html_document: default
   github_document: default
 editor_options:
   chunk_output_type: inline
@@ -40,7 +40,7 @@ import matplotlib.pyplot as plt
 from scipy import stats as sc
 ```
 
-```{r logData, echo=FALSE,message=F, warning=F,results='hide'}
+```{r logData, echo=FALSE, message=F, warning=F, results='hide'}
 df_questionnaire <- read.table("Questionnaire_data.csv", header=TRUE, fill = FALSE, sep=",")
 
 df_physiological <- list.files(path = "./MED7 Eval data Physiological", full.names = T) %>%
@@ -148,14 +148,28 @@ py_test1 = r.test1
 test1 = py_test1
 
 test1["Timestamp"] = pd.to_datetime(test1["Timestamp"]) # Convert column type to be datetime
-indexed_test1 = test1.set_index(["Timestamp"])           # Create a datetime index
-indexed_test1.rolling(100)                             # Create rolling windows
-indexed_test1.rolling(100).mean()                      # Then apply functions to rolling windows
+indexed_test1 = test1.set_index(test1.dt.microsecond)           # Create a datetime index
+indexed_test1.rolling(window=3.dt.second, min_periods=1))                             # Create rolling windows
+indexed_test1= indexed_test1.rolling(100).mean()                      # Then apply functions to rolling windows
+
+
+
+
+#def sliding_window(data, window_size, step_size):
+#    data = pd.rolling_window(data, window_size)
+#    data = data[step_size - 1 :: step_size]
+#    print data
+#    return data
 
 
 ```
 
+```{r Help}
+names <-row.names(df_event)
+r.sliding_Window = data.frame(py$indexed_test1)
+rownames(sliding_Window) = make.names()
 
+```
 
 ```{r Overview}
 sample_Summary %>%
