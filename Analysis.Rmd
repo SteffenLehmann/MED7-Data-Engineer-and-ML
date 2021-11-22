@@ -29,6 +29,7 @@ library(dplyr)
 library(reticulate)
 library(raster)
 library(sf)
+library(runner)
 ```
 
 
@@ -60,11 +61,11 @@ df_event <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Ev
 map_dfr(read_csv, .id = "file_path") %>%
 group_by(file_path) %>%
 dplyr::mutate(ParticipantID = group_indices())
-df_event <- df_event %>% mutate(
-                    minute = minute(Timestamp),
-                    second = second(Timestamp))
-df_event <- df_event %>% dplyr::select(-Framecount, -SessionID, -Email, -ParticipantID, -Timestamp)
-df_event[df_event == 'NULL'] <- NA
+#df_event <- df_event %>% mutate(
+#                    minute = minute(Timestamp),
+#                    second = second(Timestamp))
+df_event <- df_event %>% dplyr::select(-Framecount, -SessionID, -Email, -ParticipantID)
+#df_event[df_event == 'NULL'] <- NA
 
 questionnaire_Summary <- df_questionnaire %>% dplyr::group_by(Participant) %>% dplyr::select(-Notes ) %>% na.omit()
 
@@ -115,19 +116,24 @@ event_Summary <- event_Summary %>% mutate(Fake_Mole_Expired =  case_when(Event =
 ```
 
 ```{r Sliding Window prototype, echo=FALSE,message=F, warning=F,results='hide'}
-test1 <- event_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(Event, SpawnedMole, SpawnedFakeMole, Shots, Misses, Hits, RedHit, Mole_Expired,  Fake_Mole_Expired)
+test1 <- event_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(SpawnedMole, SpawnedFakeMole, Shots, Misses, Hits, RedHit, Mole_Expired,  Fake_Mole_Expired, file_path, Timestamp)
+
 
 #TODO : Compute the size based on the time column
 size <- 161 # size of window ((3386/630)*30) which should be 30 sec
 len <- nrow(test1) - size + 1 # number of sliding windows to perform 
 
 test1 <- test1 %>% replace(is.na(.), 0)
+test1 <- test1 %>% replace(is.null(.), 0)
 
-sumsmatrix <- apply(test1, 2, function(x)                   
-                     cumsum(x)[size:nrow(test1)] - c(0,cumsum(x)[1:(len-1)]))
+sumsmatrix <- apply(test1, 2, function(x)cumsum(x)[size:nrow(test1)] - c(0,cumsum(x)[1:(len-1)]))
+
+#test1$second <- as.integer(test1$second)
 
 
 
+
+#test3 <- cbind(test1[9:10], apply(test1[1:8],2, function (x)cumsum(x)[size:nrow(test1)] - c(0,cumsum(x)[1:(len-1)])))
 
 ```
 
