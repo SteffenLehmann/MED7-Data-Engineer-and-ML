@@ -122,50 +122,27 @@ event_Summary <- event_Summary %>% mutate(Fake_Mole_Expired =  case_when(Event =
 
 ```
 
-```{r Sliding Window prototype, echo=FALSE,message=F, warning=F,results='hide'}
-test1 <- event_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(SpawnedMole, SpawnedFakeMole, Shots, Misses, Hits, RedHit, Mole_Expired,  Fake_Mole_Expired, file_path, Timestamp)
+```{r Compiling event data for sliding window, echo=FALSE,message=F, warning=F,results='hide'}
+event_data <- event_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(SpawnedMole, SpawnedFakeMole, Shots, Misses, Hits, RedHit, Mole_Expired,  Fake_Mole_Expired, file_path, Timestamp)
 
+event_data <- event_data %>% replace(is.na(.), 0)
+event_data <- event_data %>% replace(is.null(.), 0)
 
-#TODO : Compute the size based on the time column
-size <- 161 # size of window ((3386/630)*30) which should be 30 sec
-len <- nrow(test1) - size + 1 # number of sliding windows to perform 
-
-test1 <- test1 %>% replace(is.na(.), 0)
-test1 <- test1 %>% replace(is.null(.), 0)
-
-sumsmatrix <- apply(test1, 2, function(x)cumsum(x)[size:nrow(test1)] - c(0,cumsum(x)[1:(len-1)]))
-
-#test1$second <- as.integer(test1$second)
-
-#test3 <- cbind(test1[9:10], apply(test1[1:8],2, function (x)cumsum(x)[size:nrow(test1)] - c(0,cumsum(x)[1:(len-1)])))
-
+sumsmatrix <- apply(event_data, 2, function(x)cumsum(x)[size:nrow(event_data)] - c(0,cumsum(x)[1:(len-1)]))
 ```
 
 ```{python Sliding Window prototype in Python, include=FALSE}
-py_test1 = r.test1
-test1 = pd.DataFrame(py_test1)
+py_event = r.event_data
+py_event_data = pd.DataFrame(py_event)
 window = "30s"
-resulttest = pd.DataFrame
-resulttest2 = pd.DataFrame
+py_windowed_events = pd.DataFrame
+py_windowed_events2 = pd.DataFrame
 
-test1.index = pd.to_datetime(test1["Timestamp"])
-test1 = test1.resample("1s").sum().fillna(0)
-#test1["Timestamp"] = pd.to_timestamp(test1["Timestamp"])
-#test1.index = test1['Timestamp'].apply(lambda x: pd.Timestamp(x))
-#test1["Timestamp"] = test1["Timestamp"].to_timestamp
-resulttest = test1.rolling(window).sum()
-resulttest2 = test1.resample(window).sum()
+py_event_data.size
 
-resulttest = test1.rolling(window).sum().resample(window).first
-type(window)
-#test1 = test1.rolling(10).sum()
-```
-
-```{r Help}
-names <-row.names(df_event)
-r.sliding_Window = data.frame(py$indexed_test1)
-rownames(sliding_Window) = make.names()
-
+py_event_data.index = pd.to_datetime(py_event_data["Timestamp"])
+py_windowed_events = py_event_data.groupby("file_path").resample("30s").sum()
+py_windowed_events2 = py_event_data.resample("30s").sum()
 ```
 
 ```{r Overview}
