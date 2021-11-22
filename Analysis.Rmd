@@ -1,8 +1,8 @@
 ---
 title: "MED7_Analysis"
 output: 
-  html_document: default
   pdf_document: default
+  html_document: default
   github_document: default
 editor_options:
   chunk_output_type: inline
@@ -39,7 +39,9 @@ import matplotlib.pyplot as plt
 from scipy import stats as sc
 ```
 
+
 ```{r logData, echo=FALSE,message=F, warning=F,results='hide', include=F}
+
 df_questionnaire <- read.table("Questionnaire_data.csv", header=TRUE, fill = FALSE, sep=",")
 
 df_physiological <- list.files(path = "./MED7 Eval data Physiological", full.names = T) %>%
@@ -157,20 +159,14 @@ resulttest2 = test1.resample(window).sum()
 resulttest = test1.rolling(window).sum().resample(window).first
 type(window)
 #test1 = test1.rolling(10).sum()
-
 ```
 
-```{python this is test area pls ignore, include=FALSE}
-ts = pd.Timestamp('2017-01-01 09:10:11')
-ts + pd.DateOffset(seconds=30)
+```{r Help}
+names <-row.names(df_event)
+r.sliding_Window = data.frame(py$indexed_test1)
+rownames(sliding_Window) = make.names()
 
-py_test1 = r.test1
-test1 = pd.DataFrame(py_test1)
-
-test1 = test1.rolling(pd.DateOffset(seconds=30)).sum()
 ```
-
-
 
 ```{r Overview}
 sample_Summary %>%
