@@ -29,11 +29,14 @@ library(dplyr)
 library(reticulate)
 library(raster)
 library(sf)
+library(corrplot)
+library(Hmisc)
+library(caret)
 ```
 
 
 
-```{r logData, echo=FALSE,message=F, warning=F,results='hide'}
+```{r logData, echo=FALSE,message=F, warning=F,results='hide', include=FALSE}
 df_questionnaire <- read.table("Questionnaire_data.csv", header=TRUE, fill = FALSE, sep=",")
 
 df_physiological <- list.files(path = "./MED7 Eval data Physiological", full.names = T) %>%
@@ -189,6 +192,62 @@ head.df <- head.df %>%
   )
 
 sample_Summary$headdist <- head.df$dist
+```
+
+```{r Parition data, include=FALSE}
+VE_label <- "Y"
+noVE_label <- "N"
+
+VE <- df_questionnaire %>% filter(VE==VE_label)
+noVE <- df_questionnaire %>% filter(VE==noVE_label)
+```
+
+```{r Does our counterbalancing work?}
+wilcox.test(VE$M1, noVE$M1, paired = F)
+wilcox.test(VE$M2, noVE$M2, paired = F)
+wilcox.test(VE$M3, noVE$M3, paired = F)
+wilcox.test(VE$M4, noVE$M4, paired = F)
+wilcox.test(VE$M5, noVE$M5, paired = F)
+wilcox.test(VE$M6, noVE$M6, paired = F)
+wilcox.test(VE$M7, noVE$M7, paired = F)
+wilcox.test(VE$M8, noVE$M8, paired = F)
+wilcox.test(VE$M9, noVE$M9, paired = F)
+wilcox.test(VE$M10, noVE$M10, paired = F)
+wilcox.test(VE$M11, noVE$M11, paired = F)
+```
+
+```{r Wilcoxon test on questionnaire}
+wilcox.test(VE$Q1, noVE$Q1, paired = F)
+wilcox.test(VE$Q2, noVE$Q2, paired = F)
+wilcox.test(VE$Q3, noVE$Q3, paired = F)
+wilcox.test(VE$Q4, noVE$Q4, paired = F)
+wilcox.test(VE$Q5, noVE$Q5, paired = F)
+wilcox.test(VE$Q6, noVE$Q6, paired = F)
+wilcox.test(VE$Q7, noVE$Q7, paired = F)
+wilcox.test(VE$Q8, noVE$Q8, paired = F)
+wilcox.test(VE$Q9, noVE$Q9, paired = F)
+wilcox.test(VE$Q10, noVE$Q10, paired = F)
+wilcox.test(VE$Q11, noVE$Q11, paired = F)
+wilcox.test(VE$Q12, noVE$Q12, paired = F)
+wilcox.test(VE$Q13, noVE$Q13, paired = F)
+```
+
+```{r Correlation Tests}
+filter_out = c(1, 2, 3, 4, 5, 6, 7, 8, 34) 
+chart.Correlation(df_questionnaire[,-filter_out], histogram=FALSE, pch=19)
+# Data for per-condition correlation matrix among all of our variables
+correlationMatrix <- Hmisc::rcorr(as.matrix(df_questionnaire[,-filter_out]))
+#correlationMatrix <- flattenCorrMatrix(correlationMatrix$r, correlationMatrix$P)
+# Per-condition correlation matrix among all of our variables
+for(condition in unique(df_questionnaire$Condition)) {
+  print(condition)
+  corrplot(cor(df_questionnaire[df_questionnaire$VE==VE,-filter_out]), type="upper",col=brewer.pal(n=8, name="RdYlBu"))
+}
+print("Both Conditions")
+corrplot(cor(df_questionnaire[-filter_out]), type="upper",col=brewer.pal(n=8, name="RdYlBu"))
+         
+corMatMy <- cor(df_questionnaire[9:33])
+highlyCor <- colnames(df_questionnaire)[findCorrelation(corMatMy, cutoff = 0.5, verbose = TRUE)]
 ```
 
 ```{python}
