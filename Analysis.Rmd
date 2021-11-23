@@ -167,7 +167,7 @@ physio_test$SmoothedEDA[is.na(physio_test$SmoothedEDA)]<-mean(physio_test$Smooth
 
 physio_test[physio_test == 0] <- NA
 
-physio_test <- physio_test %>% dplyr::group_by(file_path) %>% dplyr::select(-EDA, -Timestamp)
+physio_test <- physio_test %>% dplyr::group_by(file_path) %>% dplyr::select(-EDA)#, -Timestamp
 
 ```
 
@@ -241,7 +241,7 @@ event_data$second <- floor(event_data$second)
 physio_test$second <- floor(physio_test$second)
 
 # https://statisticsglobe.com/r-dplyr-join-inner-left-right-full-semi-anti
-AggDF <- full_join(event_data, physio_test, by = c("file_path", "minute", "second"))
+AggDF <- left_join(event_data, physio_test, by = c("file_path","minute", "second"))
 
 
 
