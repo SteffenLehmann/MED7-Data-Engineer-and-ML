@@ -30,6 +30,7 @@ library(dplyr)
 library(reticulate)
 library(raster)
 library(sf)
+library(TTR)
 ```
 
 ```{python Loading packages, include=FALSE}
@@ -77,7 +78,7 @@ df_event <- df_event %>% dplyr::select(-Framecount, -SessionID, -Email, -Partici
 questionnaire_Summary <- df_questionnaire %>% dplyr::group_by(Participant) %>% dplyr::select(-Notes ) %>% na.omit()
 
 
-physiological_Summary <- df_physiological %>% dplyr::group_by(file_path) %>% dplyr::select(file_path, EDA, IBI, -ParticipantID) 
+physiological_Summary <- df_physiological %>% dplyr::group_by(file_path) %>% dplyr::select(file_path, EDA, IBI, TimeStamp, -ParticipantID) 
 
 sample_Summary <- df_sample %>% dplyr::group_by(file_path)
 
@@ -85,7 +86,7 @@ event_Summary <- df_event %>% dplyr::group_by(file_path) %>% dplyr::select(-Test
 #dfSummary <-  dfSummary %>% merge(dsSummary, by = "Participant", all = T)
 ```
 
-```{r Pre-processing of Performance, echo=FALSE,message=F, warning=F,results='hide'}
+```{r Pre-processing of Performance, echo=FALSE,message=F, warning=F,results='hide', include=F}
 #Performance table for overview
 Performance <- table(event_Summary$Event,  event_Summary$file_path)
 Performance = t(Performance)
@@ -100,6 +101,7 @@ Performance <- as.data.frame.matrix(Performance)
 #for (i in 1:length(Performance_columns))
 #  for (j in 1:length(Column_data))
 #    event_Summary <- event_Summary %>% mutate(Performance_columns[i] <-  case_when(Event == Column_data[j] ~ 1))
+
 #spawns
 event_Summary <- event_Summary %>% mutate(SpawnedMole =  case_when(Event == 'Mole Spawned' ~ 1))
 event_Summary <- event_Summary %>% mutate(SpawnedFakeMole =  case_when(Event == 'Fake Mole Spawned' ~ 1))
@@ -112,17 +114,12 @@ event_Summary <- event_Summary %>% mutate(RedHit =  case_when(Event == 'Fake Mol
 #Expired mole
 event_Summary <- event_Summary %>% mutate(Mole_Expired =  case_when(Event == 'Mole Expired' ~ 1))
 event_Summary <- event_Summary %>% mutate(Fake_Mole_Expired =  case_when(Event == 'Fake Mole Expired' ~ 1))
-
-#TODO : missed Shots
-#event_Summary <- event_Summary %>% mutate(MissedShot = Hits-Shots)
-
-#TODO : Moles Missed
-
-
+event_Summary <- event_Summary %>% replace(is.na(.), 0)
+event_Summary <- event_Summary %>% replace(is.null(.), 0)
 
 ```
 
-```{r Compiling event data for sliding window, echo=FALSE,message=F, warning=F,results='hide'}
+```{r Compiling event data for sliding window, echo=FALSE,message=F, warning=F,results='hide', include=F}
 event_data <- event_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(SpawnedMole, SpawnedFakeMole, Shots, Misses, Hits, RedHit, Mole_Expired,  Fake_Mole_Expired, file_path, Timestamp)
 
 event_data <- event_data %>% replace(is.na(.), 0)
@@ -131,7 +128,7 @@ event_data <- event_data %>% replace(is.null(.), 0)
 sumsmatrix <- apply(event_data, 2, function(x)cumsum(x)[size:nrow(event_data)] - c(0,cumsum(x)[1:(len-1)]))
 ```
 
-```{python Sliding Window prototype in Python, include=FALSE}
+```{python Sliding Window prototype in Python, echo=FALSE,message=F, warning=F,results='hide', include=F}
 py_event = r.event_data
 py_event_data = pd.DataFrame(py_event)
 window = "30s"
@@ -143,9 +140,29 @@ py_event_data.size
 py_event_data.index = pd.to_datetime(py_event_data["Timestamp"])
 py_windowed_events = py_event_data.groupby("file_path").resample("30s").sum()
 py_windowed_events2 = py_event_data.resample("30s").sum()
+Sliding_Window = as.data.frame(py_windowed_events2)
 ```
 
-```{r Overview}
+```{r Sliding Window prototype check}
+#r_Sliding_Window <- py$Sliding_Window
+
+```
+
+```{r Pre-processing of Physiological data, echo=FALSE,message=F, warning=F,results='hide', include=F}
+
+#physiological_Summary 
+Overview_phiso<- skim(physiological_Summary)
+#physiological_Summary %>% dplyr::group_by(file_path)
+
+physio_test <- filter(physiological_Summary,  IBI <= 1500) #IBI > 50 &
+
+physio_test <- physio_test %>% group_by(file_path) %>% mutate(SmoothedEDA = runMean(EDA, 5))
+
+physio_test[physio_test == 0] <- NA
+
+```
+
+```{r Overview, echo=FALSE,message=F, warning=F,results='hide', include=F}
 sample_Summary %>%
 physiological_Summary  %>%
   select(-file_path) %>%
@@ -159,7 +176,7 @@ sample_Summary %>%
 
 ```
 
-```{r Hand tracking data}
+```{r Hand tracking data, echo=FALSE,message=F, warning=F,results='hide', include=F}
 right.df <- data.frame( x = sample_Summary$RightControllerPosWorldX,
 y = sample_Summary$RightControllerPosWorldY,
 z = sample_Summary$RightControllerPosWorldZ,
@@ -187,7 +204,7 @@ left.df <- left.df %>%
 sample_Summary$lefthanddist <- left.df$dist
 ```
 
-```{r Head tracking data}
+```{r Head tracking data, }
 head.df <- data.frame( x = sample_Summary$HeadCameraPosWorldX,
 y = sample_Summary$HeadCameraPosWorldY,
 z = sample_Summary$HeadCameraPosWorldZ,
