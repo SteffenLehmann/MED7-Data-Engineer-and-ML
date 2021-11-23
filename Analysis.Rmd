@@ -158,7 +158,7 @@ Sliding_Window = as.data.frame(py_windowed_events2)
 Overview_phiso<- skim(physiological_Summary)
 #physiological_Summary %>% dplyr::group_by(file_path)
 
-physio_test <- filter(physiological_Summary,  IBI <= 1500) #IBI > 50 &
+physio_test <- filter(physiological_Summary, IBI > -1 & IBI <= 1500)
 
 physio_test <- physio_test %>% group_by(file_path) %>% mutate(SmoothedEDA = runMean(EDA, 5))
 
