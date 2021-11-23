@@ -50,6 +50,10 @@ df_physiological <- list.files(path = "./MED7 Eval data Physiological", full.nam
 map_dfr(read_csv, .id = "file_path") %>%
 group_by(file_path) %>%
 dplyr::mutate(ParticipantID = group_indices())
+names(df_physiological)[names(df_physiological) == "TimeStamp"] <- "Timestamp"  
+df_physiological <- df_physiological %>% mutate(
+                    minute = minute(Timestamp),
+                    second = second(Timestamp))
 
 
 df_sample <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Sample.csv",full.names = T) %>%
@@ -60,8 +64,8 @@ dplyr::mutate(ParticipantID = group_indices())
 df_sample <- df_sample %>% mutate(
                     minute = minute(Timestamp),
                     second = second(Timestamp))
-df_sample <- df_sample %>% dplyr::select(-Framecount, -SessionID, -Email, -Event, -ParticipantID, -Timestamp)
-df_sample[df_sample == 'NULL'] <- NA
+df_sample <- df_sample %>% dplyr::select(-Framecount, -SessionID, -Email, -Event, -ParticipantID)
+#df_sample[df_sample == 'NULL'] <- NA
 
 
 df_event <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Event.csv",full.names = T) %>%
@@ -69,16 +73,18 @@ df_event <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Ev
 map_dfr(read_csv, .id = "file_path") %>%
 group_by(file_path) %>%
 dplyr::mutate(ParticipantID = group_indices())
-#df_event <- df_event %>% mutate(
-#                    minute = minute(Timestamp),
-#                    second = second(Timestamp))
+df_event <- df_event %>% mutate(
+                    minute = minute(Timestamp),
+                    second = second(Timestamp))
 df_event <- df_event %>% dplyr::select(-Framecount, -SessionID, -Email, -ParticipantID)
 #df_event[df_event == 'NULL'] <- NA
 
 questionnaire_Summary <- df_questionnaire %>% dplyr::group_by(Participant) %>% dplyr::select(-Notes ) %>% na.omit()
 
 
-physiological_Summary <- df_physiological %>% dplyr::group_by(file_path) %>% dplyr::select(file_path, EDA, IBI, TimeStamp, -ParticipantID) 
+physiological_Summary <- df_physiological %>% dplyr::group_by(file_path) %>% dplyr::select(file_path, EDA, IBI, Timestamp, minute, second, -ParticipantID) 
+
+
 
 sample_Summary <- df_sample %>% dplyr::group_by(file_path)
 
@@ -120,7 +126,7 @@ event_Summary <- event_Summary %>% replace(is.null(.), 0)
 ```
 
 ```{r Compiling event data for sliding window, echo=FALSE,message=F, warning=F,results='hide', include=F}
-event_data <- event_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(SpawnedMole, SpawnedFakeMole, Shots, Misses, Hits, RedHit, Mole_Expired,  Fake_Mole_Expired, file_path, Timestamp)
+event_data <- event_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(SpawnedMole, SpawnedFakeMole, Shots, Misses, Hits, RedHit, Mole_Expired,  Fake_Mole_Expired, file_path, Timestamp, minute, second,)
 
 event_data <- event_data %>% replace(is.na(.), 0)
 event_data <- event_data %>% replace(is.null(.), 0)
@@ -161,22 +167,9 @@ physio_test$SmoothedEDA[is.na(physio_test$SmoothedEDA)]<-mean(physio_test$Smooth
 
 physio_test[physio_test == 0] <- NA
 
-physio_test <- physio_test %>% dplyr::group_by(file_path) %>% dplyr::select(-EDA)
+physio_test <- physio_test %>% dplyr::group_by(file_path) %>% dplyr::select(-EDA, -Timestamp)
 
 ```
-
-```{r Aggregation of DF's, echo=FALSE,message=F, warning=F,results='hide', include=F}
-# https://statisticsglobe.com/merge-data-frames-by-two-id-columns-in-r 
-class(event_data)
-class(sample_Summary)
-class(physio_test)
-names(physio_test)[names(physio_test) == "TimeStamp"] <- "Timestamp"
-
-
-# https://statisticsglobe.com/r-dplyr-join-inner-left-right-full-semi-anti
-AggDF <- full_join(event_data, physio_test, by = c("file_path", "Timestamp")) 
-```
-
 
 ```{r Overview, echo=FALSE,message=F, warning=F,results='hide', include=F}
 sample_Summary %>%
@@ -236,6 +229,22 @@ head.df <- head.df %>%
   )
 
 sample_Summary$headdist <- head.df$dist
+```
+
+```{r Aggregation of DF's, echo=FALSE,message=F, warning=F,results='hide', include=F}
+# https://statisticsglobe.com/merge-data-frames-by-two-id-columns-in-r 
+class(event_Summary)
+class(sample_Summary)
+class(physio_test)
+
+event_data$second <- floor(event_data$second)
+physio_test$second <- floor(physio_test$second)
+
+# https://statisticsglobe.com/r-dplyr-join-inner-left-right-full-semi-anti
+AggDF <- full_join(event_data, physio_test, by = c("file_path", "minute", "second"))
+
+
+
 ```
 
 ```{python}
