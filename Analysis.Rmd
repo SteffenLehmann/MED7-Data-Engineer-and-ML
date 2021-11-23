@@ -124,8 +124,6 @@ event_data <- event_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(Spa
 
 event_data <- event_data %>% replace(is.na(.), 0)
 event_data <- event_data %>% replace(is.null(.), 0)
-
-sumsmatrix <- apply(event_data, 2, function(x)cumsum(x)[size:nrow(event_data)] - c(0,cumsum(x)[1:(len-1)]))
 ```
 
 ```{python Sliding Window prototype in Python, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -158,9 +156,27 @@ physio_test <- filter(physiological_Summary,  IBI <= 1500) #IBI > 50 &
 
 physio_test <- physio_test %>% group_by(file_path) %>% mutate(SmoothedEDA = runMean(EDA, 5))
 
+#computing the mean for each NA value
+physio_test$SmoothedEDA[is.na(physio_test$SmoothedEDA)]<-mean(physio_test$SmoothedEDA, na.rm = T)
+
 physio_test[physio_test == 0] <- NA
 
+physio_test <- physio_test %>% dplyr::group_by(file_path) %>% dplyr::select(-EDA)
+
 ```
+
+```{r Aggregation of DF's, echo=FALSE,message=F, warning=F,results='hide', include=F}
+# https://statisticsglobe.com/merge-data-frames-by-two-id-columns-in-r 
+class(event_data)
+class(sample_Summary)
+class(physio_test)
+names(physio_test)[names(physio_test) == "TimeStamp"] <- "Timestamp"
+
+
+# https://statisticsglobe.com/r-dplyr-join-inner-left-right-full-semi-anti
+AggDF <- full_join(event_data, physio_test, by = c("file_path", "Timestamp")) 
+```
+
 
 ```{r Overview, echo=FALSE,message=F, warning=F,results='hide', include=F}
 sample_Summary %>%
