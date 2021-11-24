@@ -31,6 +31,8 @@ library(reticulate)
 library(raster)
 library(sf)
 library(TTR)
+library(RHRV)
+library(data.table)
 ```
 
 ```{python Loading packages, include=FALSE}
@@ -158,7 +160,7 @@ Sliding_Window = as.data.frame(py_windowed_events2)
 Overview_phiso<- skim(physiological_Summary)
 #physiological_Summary %>% dplyr::group_by(file_path)
 
-physio_test <- filter(physiological_Summary, IBI > -1 & IBI <= 1500)
+physio_test <- filter(physiological_Summary, IBI > -1 & IBI > 401 & IBI <= 1500)
 
 physio_test <- physio_test %>% group_by(file_path) %>% mutate(SmoothedEDA = runMean(EDA, 5))
 
@@ -166,9 +168,66 @@ physio_test <- physio_test %>% group_by(file_path) %>% mutate(SmoothedEDA = runM
 physio_test$SmoothedEDA[is.na(physio_test$SmoothedEDA)]<-mean(physio_test$SmoothedEDA, na.rm = T)
 
 physio_test[physio_test == 0] <- NA
-
 physio_test <- physio_test %>% dplyr::group_by(file_path) %>% dplyr::select(-EDA)#, -Timestamp
 
+```
+
+```{r Heart Rate Measures (HRV, message=FALSE, warning=FALSE, frequency measures), echo=FALSE, include=F, results='hide'}
+#DF for HRV
+IBI_DF <- physiological_Summary %>% dplyr::select(IBI)#, -Timestamp
+IBI_DF <- filter(IBI_DF, IBI > -1 & IBI <= 1500)
+
+#IBI_DF_1 <- filter(IBI_DF, file_path == "1")
+#IBI_DF_1 <- IBI_DF_1 %>% na.omit()
+
+IBI_Vector <- IBI_DF$IBI
+
+LoadBeatVector <- function (HRVData, beats, scale = 1,
+                             datetime = "1/1/1900 0:0:0"){
+  if (HRVData$Verbose) {
+    cat("** Loading beats positions **\n")
+  }
+  dir = getwd()
+  on.exit(setwd(dir))
+  if (HRVData$Verbose) {
+    cat("   Path:", dir, "\n")
+    cat("   Scale:", scale, "\n")
+  }
+  beatsaux = beats
+  beats = beatsaux[!duplicated(beatsaux)]
+  if (length(beatsaux) != length(beats)) {
+    if (HRVData$Verbose) {
+      cat("   Removed", length(beatsaux) - length(beats), 
+          "duplicated beats\n")
+    }
+  }
+  datetimeaux = strptime(datetime, "%d/%m/%Y %H:%M:%S")
+  if (is.na(datetimeaux)) {
+    cat("   --- ERROR: Date/time format is dd/mm/yyyy HH:MM:SS ---\n")
+    return(HRVData)
+  }
+  if (HRVData$Verbose) {
+    cat("   Date: ", sprintf("%02d", datetimeaux$mday), "/", 
+        sprintf("%02d", 1 + datetimeaux$mon), "/", 1900 + 
+          datetimeaux$year, "\n", sep = "")
+    cat("   Time: ", sprintf("%02d", datetimeaux$hour), ":", 
+        sprintf("%02d", datetimeaux$min), ":", sprintf("%02d", 
+                                                       datetimeaux$sec), "\n", sep = "")
+  }
+  HRVData$datetime = datetimeaux
+  HRVData$Beat = data.frame(Time = beats * scale)
+  if (HRVData$Verbose) {
+    cat("   Number of beats:", length(HRVData$Beat$Time), 
+        "\n")
+  }
+  return(HRVData)
+}
+
+hrv.data = CreateHRVData()
+hrv.data = SetVerbose(hrv.data, TRUE )
+
+
+hrv.data = LoadBeatVector(hrv.data, IBI_Vector)
 ```
 
 ```{r Overview, echo=FALSE,message=F, warning=F,results='hide', include=F}
