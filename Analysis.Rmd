@@ -193,6 +193,15 @@ hrv.data = BuildNIHR(hrv.data)
 
 #A Filtering operation 
 hrv.data = FilterNIHR(hrv.data)
+
+#Interpolating
+hrv.data = InterpolateNIHR (hrv.data, freqhr = 4)
+
+#Plotting
+#   Non−interpolated instantaneous heart rate
+PlotNIHR(hrv.data)
+#   Interpolated instantaneous heart rate
+PlotHR(hrv.data)
 ```
 
 ```{r Overview, echo=FALSE,message=F, warning=F,results='hide', include=F}
