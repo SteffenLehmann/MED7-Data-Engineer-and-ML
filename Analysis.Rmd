@@ -132,24 +132,47 @@ event_data <- event_data %>% replace(is.na(.), 0)
 event_data <- event_data %>% replace(is.null(.), 0)
 ```
 
-```{python Sliding Window prototype in Python, echo=FALSE,message=F, warning=F,results='hide', include=F}
+```{python Sliding for event logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
 py_event = r.event_data
 py_event_data = pd.DataFrame(py_event)
 window = "30s"
 py_windowed_events = pd.DataFrame
-py_windowed_events2 = pd.DataFrame
+py_sliding_events = pd.DataFrame
 
-py_event_data.size
-
+py_event_data["file_path"] = pd.to_numeric(py_event_data["file_path"])
 py_event_data.index = pd.to_datetime(py_event_data["Timestamp"])
-py_windowed_events = py_event_data.groupby("file_path").resample("30s").sum()
-py_windowed_events2 = py_event_data.resample("30s").sum()
-Sliding_Window = as.data.frame(py_windowed_events2)
+
+py_windowed_events = py_event_data.groupby("file_path").resample("1s").sum()
+py_windowed_events["file_path"] = py_windowed_events.index.get_level_values(0)
+py_windowed_events["Timestamp"] = py_windowed_events.index.get_level_values(1)
+
+py_sliding_events = py_windowed_events.set_index("Timestamp").rolling("30s").sum()
+py_sliding_events["file_path"] = py_windowed_events.index.get_level_values(0)
+
+```
+
+```{python Sliding for sample logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
+py_sample = r.df_sample
+py_sample_data = pd.DataFrame(py_sample)
+window = "30s"
+py_windowed_samples = pd.DataFrame
+py_sliding_samples = pd.DataFrame
+
+py_sample_data["file_path"] = pd.to_numeric(py_sample_data["file_path"])
+py_sample_data.index = pd.to_datetime(py_sample_data["Timestamp"])
+
+py_windowed_samples = py_sample_data.groupby("file_path").resample("1s").sum()
+py_windowed_samples["file_path"] = py_windowed_samples.index.get_level_values(0)
+py_windowed_samples["Timestamp"] = py_windowed_samples.index.get_level_values(1)
+
+py_sliding_samples = py_windowed_samples.set_index("Timestamp").rolling("30s").sum()
+py_sliding_samples["file_path"] = py_windowed_samples.index.get_level_values(0)
+
 ```
 
 ```{r Sliding Window prototype check}
-#r_Sliding_Window <- py$Sliding_Window
-
+r_event_Window <- py$py_sliding_events
+r_sample_Window <- py$py_sliding_samples
 ```
 
 ```{r Pre-processing of Physiological data, echo=FALSE,message=F, warning=F,results='hide', include=F}
