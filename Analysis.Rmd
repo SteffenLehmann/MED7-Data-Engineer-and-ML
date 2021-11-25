@@ -136,6 +136,18 @@ event_data <- event_data %>% replace(is.na(.), 0)
 event_data <- event_data %>% replace(is.null(.), 0)
 ```
 
+```{r Pre-processing of physiologica logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
+physio_DF <- filter(physiological_Summary, IBI > -1 & IBI > 401 & IBI <= 1500)
+
+physio_DF <- physio_DF %>% group_by(file_path) %>% mutate(SmoothedEDA = runMean(EDA, 5))
+
+#computing the mean for each NA value
+physio_DF$SmoothedEDA[is.na(physio_DF$SmoothedEDA)]<-mean(physio_DF$SmoothedEDA, na.rm = T)
+physio_DF[physio_DF == 0] <- NA
+physio_DF <- physio_DF %>% dplyr::group_by(file_path) %>% dplyr::select(-EDA, -minute, -second)#, -Timestamp
+names(physio_DF)[names(physio_DF) == "SmoothedEDA"] <- "EDA"  
+```
+
 ```{python Sliding for event logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
 py_event = r.event_data
 py_event_data = pd.DataFrame(py_event)
@@ -174,25 +186,7 @@ py_sliding_samples["file_path"] = py_windowed_samples.index.get_level_values(0)
 
 ```
 
-```{r Sliding Window prototype check}
-r_event_Window <- py$py_sliding_events
-r_sample_Window <- py$py_sliding_samples
-```
-
-```{r Pre-processing of physiologica logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
-physio_DF <- filter(physiological_Summary, IBI > -1 & IBI > 401 & IBI <= 1500)
-
-physio_DF <- physio_DF %>% group_by(file_path) %>% mutate(SmoothedEDA = runMean(EDA, 5))
-
-#computing the mean for each NA value
-physio_DF$SmoothedEDA[is.na(physio_DF$SmoothedEDA)]<-mean(physio_DF$SmoothedEDA, na.rm = T)
-physio_DF[physio_DF == 0] <- NA
-physio_DF <- physio_DF %>% dplyr::group_by(file_path) %>% dplyr::select(-EDA, -minute, -second)#, -Timestamp
-names(physio_DF)[names(physio_DF) == "SmoothedEDA"] <- "EDA"  
-```
-
-
-```{python Sliding for IBI logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
+```{python Sliding for physiologica logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
 py_physio_DF = r.physio_DF
 py_physio_Data = pd.DataFrame(py_physio_DF)
 window = "30s"
@@ -211,9 +205,16 @@ py_sliding_physio["file_path"] = py_windowed_physio.index.get_level_values(0)
 
 ```
 
+```{r Sliding Window prototype check}
+r_event_Window <- py$py_sliding_events
+r_sample_Window <- py$py_sliding_samples
+r_physio_Window <- py$py_sliding_physio
+```
+
+
+
+
 ```{r Heart Rate Measures HRV, message=FALSE, warning=FALSE, frequency measures), echo=FALSE, include=F, results='hide'}
-
-
 IBI_DF <- filter(IBI_DF, file_path == "1")
 
 IBI_DF$beats = as.numeric(difftime(IBI_DF$Timestamp, IBI_DF$Timestamp[1] , units ="secs"))
