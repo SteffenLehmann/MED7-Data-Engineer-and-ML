@@ -248,6 +248,41 @@ corrplot(cor(df_questionnaire[-filter_out]), type="upper",col=brewer.pal(n=8, na
          
 corMatMy <- cor(df_questionnaire[9:33])
 highlyCor <- colnames(df_questionnaire)[findCorrelation(corMatMy, cutoff = 0.5, verbose = TRUE)]
+
+corMatMy <- cor(df_questionnaire[9:33])
+corrplot(corMatMy, order = "hclust", tl.cex = 0.7)
+highlyCor <- colnames(df_questionnaire)[findCorrelation(corMatMy, cutoff = 0.5, verbose = TRUE)]
+bc_data_cor <- df_questionnaire[, which(!colnames(df_questionnaire) %in% highlyCor)]
+
+df_questionnaire <- df_questionnaire %>% dplyr::select(-Notes)
+questionnaire.pca <- prcomp(df_questionnaire[9:33], center=TRUE, scale=TRUE)
+plot(questionnaire.pca, type="l", main='')
+grid(nx = 10, ny = 14)
+title(main = "Principal components weight", sub = NULL, xlab = "Components")
+box()
+summary(questionnaire.pca)
+pca_var <- questionnaire.pca$sdev^2
+pve_df <- pca_var / sum(pca_var)
+cum_pve <- cumsum(pve_df)
+pve_table <- tibble(comp = seq(13:ncol(df_questionnaire %>% dplyr::select(-VE))), pve_df, cum_pve)
+ggplot(pve_table, aes(x = comp, y = cum_pve)) + 
+  geom_point() + 
+  geom_abline(intercept = 0.95, color = "red", slope = 0) + theme_minimal()
+pca_df <- as.data.frame(questionnaire.pca$x)
+ggplot(pca_df, aes(x=PC1, y=PC2, col=df_questionnaire$VE)) + geom_point(alpha=0.5)
+
+bc_data_cor2 <- bc_data_cor[7:25]
+questionnaire.pca2 <- prcomp(bc_data_cor2, center=TRUE, scale=TRUE)
+summary(questionnaire.pca2)
+pca_var2 <- questionnaire.pca2$sdev^2
+pve_df2 <- pca_var2 / sum(pca_var2)
+cum_pve2 <- cumsum(pve_df2)
+pve_table2 <- tibble(comp = seq(1:ncol(bc_data_cor2)), pve_df2, cum_pve2)
+ggplot(pve_table2, aes(x = comp, y = cum_pve2)) + 
+  geom_point() + 
+  geom_abline(intercept = 0.95, color = "red", slope = 0)
+pca2_df <- as.data.frame(questionnaire.pca2$x)
+ggplot(pca2_df, aes(x=PC1, y=PC2, col=df_questionnaire$VE)) + geom_point(alpha=0.5)
 ```
 
 ```{python}
