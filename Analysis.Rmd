@@ -179,27 +179,41 @@ r_event_Window <- py$py_sliding_events
 r_sample_Window <- py$py_sliding_samples
 ```
 
-```{r Pre-processing of Physiological data, echo=FALSE,message=F, warning=F,results='hide', include=F}
+```{r Pre-processing of physiologica logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
+physio_DF <- filter(physiological_Summary, IBI > -1 & IBI > 401 & IBI <= 1500)
 
-#physiological_Summary 
-Overview_phiso<- skim(physiological_Summary)
-#physiological_Summary %>% dplyr::group_by(file_path)
-
-physio_test <- filter(physiological_Summary, IBI > -1 & IBI > 401 & IBI <= 1500)
-
-physio_test <- physio_test %>% group_by(file_path) %>% mutate(SmoothedEDA = runMean(EDA, 5))
+physio_DF <- physio_DF %>% group_by(file_path) %>% mutate(SmoothedEDA = runMean(EDA, 5))
 
 #computing the mean for each NA value
-physio_test$SmoothedEDA[is.na(physio_test$SmoothedEDA)]<-mean(physio_test$SmoothedEDA, na.rm = T)
+physio_DF$SmoothedEDA[is.na(physio_DF$SmoothedEDA)]<-mean(physio_DF$SmoothedEDA, na.rm = T)
+physio_DF[physio_DF == 0] <- NA
+physio_DF <- physio_DF %>% dplyr::group_by(file_path) %>% dplyr::select(-EDA, -minute, -second)#, -Timestamp
+names(physio_DF)[names(physio_DF) == "SmoothedEDA"] <- "EDA"  
+```
 
-physio_test[physio_test == 0] <- NA
-physio_test <- physio_test %>% dplyr::group_by(file_path) %>% dplyr::select(-EDA)#, -Timestamp
+
+```{python Sliding for IBI logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
+py_physio_DF = r.physio_DF
+py_physio_Data = pd.DataFrame(py_physio_DF)
+window = "30s"
+py_windowed_physio = pd.DataFrame
+py_sliding_physio = pd.DataFrame
+
+py_physio_Data["file_path"] = pd.to_numeric(py_physio_Data["file_path"])
+py_physio_Data.index = pd.to_datetime(py_physio_Data["Timestamp"])
+
+py_windowed_physio = py_physio_Data.groupby("file_path").resample("1s").mean()
+py_windowed_physio["file_path"] = py_windowed_physio.index.get_level_values(0)
+py_windowed_physio["Timestamp"] = py_windowed_physio.index.get_level_values(1)
+
+py_sliding_physio = py_windowed_physio.set_index("Timestamp").rolling("30s").mean()
+py_sliding_physio["file_path"] = py_windowed_physio.index.get_level_values(0)
 
 ```
 
 ```{r Heart Rate Measures HRV, message=FALSE, warning=FALSE, frequency measures), echo=FALSE, include=F, results='hide'}
-#DF for HRV
-IBI_DF <- filter(physiological_Summary, IBI > -1 & IBI > 401 & IBI <= 1500)
+
+
 IBI_DF <- filter(IBI_DF, file_path == "1")
 
 IBI_DF$beats = as.numeric(difftime(IBI_DF$Timestamp, IBI_DF$Timestamp[1] , units ="secs"))
@@ -209,26 +223,35 @@ IBI_Vector <- IBI_DF$beats
 # RHRV doc: https://rhrv.r-forge.r-project.org/tutorial/RHRV-quickstart.pdf
 
 hrv.data = CreateHRVData()
-hrv.data = SetVerbose(hrv.data, TRUE )
+hrv.data = SetVerbose(hrv.data, FALSE )
 #Loads the position in time of each beat
 hrv.data = LoadBeatVector(hrv.data, IBI_Vector)
-
 #HRV time series. Build Non Interpolated Heart Rate
 hrv.data = BuildNIHR(hrv.data)
-
 #A Filtering operation 
 hrv.data = FilterNIHR(hrv.data)
-
 #Interpolating
 hrv.data = InterpolateNIHR (hrv.data, freqhr = 4)
-
 #Plotting
 #   Non−interpolated instantaneous heart rate
-PlotNIHR(hrv.data)
+#PlotNIHR(hrv.data)
 #   Interpolated instantaneous heart rate
-PlotHR(hrv.data)
-```
+#PlotHR(hrv.data)
+#Time-domain analysis techniques
+hrv.data = CreateTimeAnalysis(hrv.data, size = 300, interval = 7.8125)
 
+#Frequency-domain analysis techniques
+hrv.data = CreateFreqAnalysis(hrv.data)
+hrv.data = CalculatePowerBand(hrv.data, indexFreqAnalysis= 1, size = 300, sizesp = 300, shift = 450, type = "fourier", ULFmin = 0, ULFmax = 0.03, VLFmin = 0.03, VLFmax = 0.05, LFmin = 0.05, LFmax = 0.15, HFmin = 0.15, HFmax = 0.4 )
+#Time domain
+hrv.data$TimeAnalysis[[1]]$SDNN #SDNN
+hrv.data$TimeAnalysis[[1]]$rMSSD #rMSSD
+#Frequency domain
+hrv.data$FreqAnalysis[[1]]$LF # LF
+hrv.data$FreqAnalysis[[1]]$HF #HF
+hrv.data$FreqAnalysis[[1]]$LFHF #LFHF
+
+```
 ```{r Overview, echo=FALSE,message=F, warning=F,results='hide', include=F}
 sample_Summary %>%
 physiological_Summary  %>%
@@ -294,13 +317,13 @@ sample_Summary$headdist <- head.df$dist
 # https://statisticsglobe.com/merge-data-frames-by-two-id-columns-in-r 
 class(event_Summary)
 class(sample_Summary)
-class(physio_test)
+class(physio_DF)
 
 event_data$second <- floor(event_data$second)
-physio_test$second <- floor(physio_test$second)
+physio_DF$second <- floor(physio_DF$second)
 
 # https://statisticsglobe.com/r-dplyr-join-inner-left-right-full-semi-anti
-AggDF <- left_join(event_data, physio_test, by = c("file_path","minute", "second"))
+AggDF <- left_join(event_data, physio_DF, by = c("file_path","minute", "second"))
 
 ```
 
