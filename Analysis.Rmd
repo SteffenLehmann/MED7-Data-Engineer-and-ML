@@ -1,8 +1,9 @@
 ---
 title: "MED7_Analysis"
 output: 
-  html_document: default
   pdf_document: default
+  html_document: default
+  github_document: default
 editor_options:
   chunk_output_type: inline
 ---
@@ -29,14 +30,23 @@ library(dplyr)
 library(reticulate)
 library(raster)
 library(sf)
+library(TTR)
+library(RHRV)
 library(corrplot)
 library(Hmisc)
 library(caret)
+library(data.table)
+```
+
+```{python Loading packages, include=FALSE}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy import stats as sc
 ```
 
 
-
-```{r logData, echo=FALSE,message=F, warning=F,results='hide', include=FALSE}
+```{r logData, echo=FALSE,message=F, warning=F,results='hide', include=F}
 df_questionnaire <- read.table("Questionnaire_data.csv", header=TRUE, fill = FALSE, sep=",")
 
 df_physiological <- list.files(path = "./MED7 Eval data Physiological", full.names = T) %>%
@@ -44,6 +54,10 @@ df_physiological <- list.files(path = "./MED7 Eval data Physiological", full.nam
 map_dfr(read_csv, .id = "file_path") %>%
 group_by(file_path) %>%
 dplyr::mutate(ParticipantID = group_indices())
+names(df_physiological)[names(df_physiological) == "TimeStamp"] <- "Timestamp"  
+df_physiological <- df_physiological %>% mutate(
+                    minute = minute(Timestamp),
+                    second = second(Timestamp))
 
 
 df_sample <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Sample.csv",full.names = T) %>%
@@ -54,8 +68,8 @@ dplyr::mutate(ParticipantID = group_indices())
 df_sample <- df_sample %>% mutate(
                     minute = minute(Timestamp),
                     second = second(Timestamp))
-df_sample <- df_sample %>% dplyr::select(-Framecount, -SessionID, -Email, -Event, -ParticipantID, -Timestamp)
-df_sample[df_sample == 'NULL'] <- NA
+df_sample <- df_sample %>% dplyr::select(-Framecount, -SessionID, -Email, -Event, -ParticipantID)
+#df_sample[df_sample == 'NULL'] <- NA
 
 
 df_event <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "Event.csv",full.names = T) %>%
@@ -66,13 +80,15 @@ dplyr::mutate(ParticipantID = group_indices())
 df_event <- df_event %>% mutate(
                     minute = minute(Timestamp),
                     second = second(Timestamp))
-df_event <- df_event %>% dplyr::select(-Framecount, -SessionID, -Email, -ParticipantID, -Timestamp)
-df_event[df_event == 'NULL'] <- NA
+df_event <- df_event %>% dplyr::select(-Framecount, -SessionID, -Email, -ParticipantID)
+#df_event[df_event == 'NULL'] <- NA
 
 questionnaire_Summary <- df_questionnaire %>% dplyr::group_by(Participant) %>% dplyr::select(-Notes ) %>% na.omit()
 
 
-physiological_Summary <- df_physiological %>% dplyr::group_by(file_path) %>% dplyr::select(file_path, EDA, IBI, -ParticipantID) 
+physiological_Summary <- df_physiological %>% dplyr::group_by(file_path) %>% dplyr::select(file_path, EDA, IBI, Timestamp, minute, second, -ParticipantID) 
+
+
 
 sample_Summary <- df_sample %>% dplyr::group_by(file_path)
 
@@ -80,7 +96,7 @@ event_Summary <- df_event %>% dplyr::group_by(file_path) %>% dplyr::select(-Test
 #dfSummary <-  dfSummary %>% merge(dsSummary, by = "Participant", all = T)
 ```
 
-```{r Pre-processing of Performance, echo=FALSE,message=F, warning=F,results='hide'}
+```{r Pre-processing of Performance, echo=FALSE,message=F, warning=F,results='hide', include=F}
 #Performance table for overview
 Performance <- table(event_Summary$Event,  event_Summary$file_path)
 Performance = t(Performance)
@@ -95,6 +111,7 @@ Performance <- as.data.frame.matrix(Performance)
 #for (i in 1:length(Performance_columns))
 #  for (j in 1:length(Column_data))
 #    event_Summary <- event_Summary %>% mutate(Performance_columns[i] <-  case_when(Event == Column_data[j] ~ 1))
+
 #spawns
 event_Summary <- event_Summary %>% mutate(SpawnedMole =  case_when(Event == 'Mole Spawned' ~ 1))
 event_Summary <- event_Summary %>% mutate(SpawnedFakeMole =  case_when(Event == 'Fake Mole Spawned' ~ 1))
@@ -107,34 +124,112 @@ event_Summary <- event_Summary %>% mutate(RedHit =  case_when(Event == 'Fake Mol
 #Expired mole
 event_Summary <- event_Summary %>% mutate(Mole_Expired =  case_when(Event == 'Mole Expired' ~ 1))
 event_Summary <- event_Summary %>% mutate(Fake_Mole_Expired =  case_when(Event == 'Fake Mole Expired' ~ 1))
-
-#TODO : missed Shots
-#event_Summary <- event_Summary %>% mutate(MissedShot = Hits-Shots)
-
-#TODO : Moles Missed
-
-
+event_Summary <- event_Summary %>% replace(is.na(.), 0)
+event_Summary <- event_Summary %>% replace(is.null(.), 0)
 
 ```
 
-```{r Sliding Window prototype, echo=FALSE,message=F, warning=F,results='hide'}
-test1 <- event_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(Event, SpawnedMole, SpawnedFakeMole, Shots, Misses, Hits, RedHit, Mole_Expired,  Fake_Mole_Expired)
+```{r Compiling event data for sliding window, echo=FALSE,message=F, warning=F,results='hide', include=F}
+event_data <- event_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(SpawnedMole, SpawnedFakeMole, Shots, Misses, Hits, RedHit, Mole_Expired,  Fake_Mole_Expired, file_path, Timestamp, minute, second,)
 
-#TODO : Compute the size based on the time column
-size <- 161 # size of window ((3386/630)*30) which should be 30 sec
-len <- nrow(test1) - size + 1 # number of sliding windows to perform 
+event_data <- event_data %>% replace(is.na(.), 0)
+event_data <- event_data %>% replace(is.null(.), 0)
+```
 
-test1 <- test1 %>% replace(is.na(.), 0)
+```{python Sliding for event logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
+py_event = r.event_data
+py_event_data = pd.DataFrame(py_event)
+window = "30s"
+py_windowed_events = pd.DataFrame
+py_sliding_events = pd.DataFrame
 
-sumsmatrix <- apply(test1, 2, function(x)                   
-                     cumsum(x)[size:nrow(test1)] - c(0,cumsum(x)[1:(len-1)]))
+py_event_data["file_path"] = pd.to_numeric(py_event_data["file_path"])
+py_event_data.index = pd.to_datetime(py_event_data["Timestamp"])
 
+py_windowed_events = py_event_data.groupby("file_path").resample("1s").sum()
+py_windowed_events["file_path"] = py_windowed_events.index.get_level_values(0)
+py_windowed_events["Timestamp"] = py_windowed_events.index.get_level_values(1)
 
-
+py_sliding_events = py_windowed_events.set_index("Timestamp").rolling("30s").sum()
+py_sliding_events["file_path"] = py_windowed_events.index.get_level_values(0)
 
 ```
 
-```{r Overview}
+```{python Sliding for sample logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
+py_sample = r.df_sample
+py_sample_data = pd.DataFrame(py_sample)
+window = "30s"
+py_windowed_samples = pd.DataFrame
+py_sliding_samples = pd.DataFrame
+
+py_sample_data["file_path"] = pd.to_numeric(py_sample_data["file_path"])
+py_sample_data.index = pd.to_datetime(py_sample_data["Timestamp"])
+
+py_windowed_samples = py_sample_data.groupby("file_path").resample("1s").sum()
+py_windowed_samples["file_path"] = py_windowed_samples.index.get_level_values(0)
+py_windowed_samples["Timestamp"] = py_windowed_samples.index.get_level_values(1)
+
+py_sliding_samples = py_windowed_samples.set_index("Timestamp").rolling("30s").sum()
+py_sliding_samples["file_path"] = py_windowed_samples.index.get_level_values(0)
+
+```
+
+```{r Sliding Window prototype check}
+r_event_Window <- py$py_sliding_events
+r_sample_Window <- py$py_sliding_samples
+```
+
+```{r Pre-processing of Physiological data, echo=FALSE,message=F, warning=F,results='hide', include=F}
+
+#physiological_Summary 
+Overview_phiso<- skim(physiological_Summary)
+#physiological_Summary %>% dplyr::group_by(file_path)
+
+physio_test <- filter(physiological_Summary, IBI > -1 & IBI > 401 & IBI <= 1500)
+
+physio_test <- physio_test %>% group_by(file_path) %>% mutate(SmoothedEDA = runMean(EDA, 5))
+
+#computing the mean for each NA value
+physio_test$SmoothedEDA[is.na(physio_test$SmoothedEDA)]<-mean(physio_test$SmoothedEDA, na.rm = T)
+
+physio_test[physio_test == 0] <- NA
+physio_test <- physio_test %>% dplyr::group_by(file_path) %>% dplyr::select(-EDA)#, -Timestamp
+
+```
+
+```{r Heart Rate Measures HRV, message=FALSE, warning=FALSE, frequency measures), echo=FALSE, include=F, results='hide'}
+#DF for HRV
+IBI_DF <- filter(physiological_Summary, IBI > -1 & IBI > 401 & IBI <= 1500)
+IBI_DF <- filter(IBI_DF, file_path == "1")
+
+IBI_DF$beats = as.numeric(difftime(IBI_DF$Timestamp, IBI_DF$Timestamp[1] , units ="secs"))
+
+IBI_Vector <- IBI_DF$beats
+
+# RHRV doc: https://rhrv.r-forge.r-project.org/tutorial/RHRV-quickstart.pdf
+
+hrv.data = CreateHRVData()
+hrv.data = SetVerbose(hrv.data, TRUE )
+#Loads the position in time of each beat
+hrv.data = LoadBeatVector(hrv.data, IBI_Vector)
+
+#HRV time series. Build Non Interpolated Heart Rate
+hrv.data = BuildNIHR(hrv.data)
+
+#A Filtering operation 
+hrv.data = FilterNIHR(hrv.data)
+
+#Interpolating
+hrv.data = InterpolateNIHR (hrv.data, freqhr = 4)
+
+#Plotting
+#   Non−interpolated instantaneous heart rate
+PlotNIHR(hrv.data)
+#   Interpolated instantaneous heart rate
+PlotHR(hrv.data)
+```
+
+```{r Overview, echo=FALSE,message=F, warning=F,results='hide', include=F}
 sample_Summary %>%
 physiological_Summary  %>%
   select(-file_path) %>%
@@ -148,7 +243,7 @@ sample_Summary %>%
 
 ```
 
-```{r Hand tracking data}
+```{r Hand tracking data, echo=FALSE,message=F, warning=F,results='hide', include=F}
 right.df <- data.frame( x = sample_Summary$RightControllerPosWorldX,
 y = sample_Summary$RightControllerPosWorldY,
 z = sample_Summary$RightControllerPosWorldZ,
@@ -176,7 +271,7 @@ left.df <- left.df %>%
 sample_Summary$lefthanddist <- left.df$dist
 ```
 
-```{r Head tracking data}
+```{r Head tracking data, }
 head.df <- data.frame( x = sample_Summary$HeadCameraPosWorldX,
 y = sample_Summary$HeadCameraPosWorldY,
 z = sample_Summary$HeadCameraPosWorldZ,
@@ -193,6 +288,21 @@ head.df <- head.df %>%
 
 sample_Summary$headdist <- head.df$dist
 ```
+
+
+```{r Aggregation of DF's, echo=FALSE,message=F, warning=F,results='hide', include=F}
+# https://statisticsglobe.com/merge-data-frames-by-two-id-columns-in-r 
+class(event_Summary)
+class(sample_Summary)
+class(physio_test)
+
+event_data$second <- floor(event_data$second)
+physio_test$second <- floor(physio_test$second)
+
+# https://statisticsglobe.com/r-dplyr-join-inner-left-right-full-semi-anti
+AggDF <- left_join(event_data, physio_test, by = c("file_path","minute", "second"))
+
+
 
 ```{r Parition data, include=FALSE}
 VE_label <- "Y"
@@ -286,9 +396,7 @@ ggplot(pca2_df, aes(x=PC1, y=PC2, col=df_questionnaire$VE)) + geom_point(alpha=0
 ```
 
 ```{python}
-import matplotlib.pyplot as plt
-from scipy import stats as sc
-import pandas as pd
+
 
 #py_dfSummary = r.dfSummary
 #x = py_dfSummary["EDA"]
@@ -322,7 +430,6 @@ plt.show()
 ```
 
 ```{python}
-import numpy as np
 my_python_array = np.array([2,4,6,8])
 for item in my_python_array:
     print(item)
