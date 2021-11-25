@@ -36,6 +36,8 @@ library(corrplot)
 library(Hmisc)
 library(caret)
 library(data.table)
+library(viridis)
+library(hrbrthemes)
 ```
 
 ```{python Loading packages, include=FALSE}
@@ -127,6 +129,9 @@ event_Summary <- event_Summary %>% mutate(Fake_Mole_Expired =  case_when(Event =
 event_Summary <- event_Summary %>% replace(is.na(.), 0)
 event_Summary <- event_Summary %>% replace(is.null(.), 0)
 
+#event_Summary <- event_Summary %>% filter(Event == c('Mole Spawned', 'Fake Mole Spawned', 'Pointer Shoot' , 'Mole Missed', 'Mole Hit', 'Fake Mole Hit', 'Mole Expired', 'Fake Mole Expired'))
+event_Summary <- event_Summary %>% filter(Event != "Wall Size Update", Event != "MotorSpace Size Update", Event != "CountDown 3", Event != "CountDown 2",Event !=  "CountDown 1", Event != "Controller Offset Set 0", Event !=  "CountDown 0", Event !=  "Prism Offset Set 0")
+
 ```
 
 ```{r Compiling event data for sliding window, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -135,6 +140,53 @@ event_data <- event_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(Spa
 event_data <- event_data %>% replace(is.na(.), 0)
 event_data <- event_data %>% replace(is.null(.), 0)
 ```
+
+```{r Hand tracking data, echo=FALSE,message=F, warning=F,results='hide', include=F}
+right.df <- data.frame( x = sample_Summary$RightControllerPosWorldX,
+y = sample_Summary$RightControllerPosWorldY,
+z = sample_Summary$RightControllerPosWorldZ,
+group = sample_Summary$file_path)
+right.df <- st_as_sf(right.df,coords = c("x","y","z"),remove = F)
+right.df <- right.df %>%
+  group_by(group) %>%
+  dplyr::mutate(
+    lead = geometry[(dplyr::row_number()) + 1],
+    dist = st_distance(geometry, lead, by_element = T),
+  )
+sample_Summary$righthanddist <- right.df$dist
+
+left.df <- data.frame( x = sample_Summary$LeftControllerPosTravelX,
+y = sample_Summary$LeftControllerPosWorldY,
+z = sample_Summary$LeftControllerPosWorldZ,
+group = sample_Summary$file_path)
+left.df <- st_as_sf(left.df,coords = c("x","y","z"),remove = F)
+left.df <- left.df %>%
+  group_by(group) %>%
+  dplyr::mutate(
+    lead = geometry[(dplyr::row_number()) + 1],
+    dist = st_distance(geometry, lead, by_element = T),
+  )
+sample_Summary$lefthanddist <- left.df$dist
+```
+
+```{r Head tracking data, }
+head.df <- data.frame( x = sample_Summary$HeadCameraPosWorldX,
+y = sample_Summary$HeadCameraPosWorldY,
+z = sample_Summary$HeadCameraPosWorldZ,
+group = sample_Summary$file_path)
+
+head.df <- st_as_sf(head.df,coords = c("x","y","z"),remove = F)
+
+head.df <- head.df %>%
+  group_by(group) %>%
+  dplyr::mutate(
+    lead = geometry[(dplyr::row_number()) + 1],
+    dist = st_distance(geometry, lead, by_element = T),
+  )
+
+sample_Summary$headdist <- head.df$dist
+```
+
 
 ```{python Sliding for event logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
 py_event = r.event_data
@@ -156,7 +208,7 @@ py_sliding_events["file_path"] = py_windowed_events.index.get_level_values(0)
 ```
 
 ```{python Sliding for sample logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
-py_sample = r.df_sample
+py_sample = r.sample_Summary
 py_sample_data = pd.DataFrame(py_sample)
 window = "30s"
 py_windowed_samples = pd.DataFrame
@@ -177,6 +229,51 @@ py_sliding_samples["file_path"] = py_windowed_samples.index.get_level_values(0)
 ```{r Sliding Window prototype check}
 r_event_Window <- py$py_sliding_events
 r_sample_Window <- py$py_sliding_samples
+
+r_sample_Window$Timestamp = row.names(r_sample_Window)
+r_sample_Window$Timestamp = ave(r_sample_Window$headdist, r_sample_Window$file_path, FUN = seq_along)
+
+r_event_Window$Timestamp = row.names(r_event_Window)
+r_event_Window$Timestamp = ave(r_event_Window$Hits, r_event_Window$file_path, FUN = seq_along)
+
+r_sample_Window %>%
+  ggplot( aes(x=Timestamp, y=headdist, group=factor(file_path), color=factor(file_path))) +
+    #geom_line() +
+    #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
+    ggtitle("Total head movement over time") +
+    theme_ipsum() +
+    ylab("Head movement") +
+    geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
+
+r_sample_Window %>%
+  ggplot( aes(x=Timestamp, y=righthanddist, group=factor(file_path), color=factor(file_path))) +
+    #geom_line() +
+    #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
+    ggtitle("Total right hand movement over time") +
+    theme_ipsum() +
+    ylab("Hand movement") +
+    geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
+
+r_sample_Window %>%
+  ggplot( aes(x=Timestamp, y=lefthanddist, group=factor(file_path), color=factor(file_path))) +
+    geom_line() +
+    #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
+    ggtitle("Total left hand movement over time") +
+    theme_ipsum() +
+    ylab("Hand movement") +
+    geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
+
+
+
+r_event_Window %>%
+  filter(Timestamp != c(1:30)) %>%
+  ggplot( aes(x=Timestamp, y=Hits, group=factor(file_path), color=factor(file_path))) +
+    geom_line() +
+    #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
+    ggtitle("Total hits over time") +
+    theme_ipsum() +
+    ylab("Hits") +
+    geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
 ```
 
 ```{r Pre-processing of Physiological data, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -242,53 +339,6 @@ sample_Summary %>%
    skim()
 
 ```
-
-```{r Hand tracking data, echo=FALSE,message=F, warning=F,results='hide', include=F}
-right.df <- data.frame( x = sample_Summary$RightControllerPosWorldX,
-y = sample_Summary$RightControllerPosWorldY,
-z = sample_Summary$RightControllerPosWorldZ,
-group = sample_Summary$file_path)
-right.df <- st_as_sf(right.df,coords = c("x","y","z"),remove = F)
-right.df <- right.df %>%
-  group_by(group) %>%
-  dplyr::mutate(
-    lead = geometry[(dplyr::row_number()) + 1],
-    dist = st_distance(geometry, lead, by_element = T),
-  )
-sample_Summary$righthanddist <- right.df$dist
-
-left.df <- data.frame( x = sample_Summary$LeftControllerPosTravelX,
-y = sample_Summary$LeftControllerPosWorldY,
-z = sample_Summary$LeftControllerPosWorldZ,
-group = sample_Summary$file_path)
-left.df <- st_as_sf(left.df,coords = c("x","y","z"),remove = F)
-left.df <- left.df %>%
-  group_by(group) %>%
-  dplyr::mutate(
-    lead = geometry[(dplyr::row_number()) + 1],
-    dist = st_distance(geometry, lead, by_element = T),
-  )
-sample_Summary$lefthanddist <- left.df$dist
-```
-
-```{r Head tracking data, }
-head.df <- data.frame( x = sample_Summary$HeadCameraPosWorldX,
-y = sample_Summary$HeadCameraPosWorldY,
-z = sample_Summary$HeadCameraPosWorldZ,
-group = sample_Summary$file_path)
-
-head.df <- st_as_sf(head.df,coords = c("x","y","z"),remove = F)
-
-head.df <- head.df %>%
-  group_by(group) %>%
-  dplyr::mutate(
-    lead = geometry[(dplyr::row_number()) + 1],
-    dist = st_distance(geometry, lead, by_element = T),
-  )
-
-sample_Summary$headdist <- head.df$dist
-```
-
 
 ```{r Aggregation of DF's, echo=FALSE,message=F, warning=F,results='hide', include=F}
 # https://statisticsglobe.com/merge-data-frames-by-two-id-columns-in-r 
