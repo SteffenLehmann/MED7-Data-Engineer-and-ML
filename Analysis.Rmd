@@ -45,6 +45,11 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy import stats as sc
+
+import os
+import collections
+import msgpack
+import Serialized_Dict
 ```
 
 
@@ -169,7 +174,7 @@ left.df <- left.df %>%
 sample_Summary$lefthanddist <- left.df$dist
 ```
 
-```{r Head tracking data, }
+```{r Head tracking data, echo=FALSE,message=F, warning=F,results='hide', include=F}
 head.df <- data.frame( x = sample_Summary$HeadCameraPosWorldX,
 y = sample_Summary$HeadCameraPosWorldY,
 z = sample_Summary$HeadCameraPosWorldZ,
@@ -185,6 +190,23 @@ head.df <- head.df %>%
   )
 
 sample_Summary$headdist <- head.df$dist
+```
+
+```{r eye tracking data, echo=FALSE,message=F, warning=F,results='hide', include=F}
+eye_data <- sample_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(GazeConfidence, WorldGazeHitPositionX, WorldGazeHitPositionY, WorldGazeHitPositionZ)
+eye_data[eye_data == "NULL"] <- "0.0000"
+eye_data$Timestamp <- sample_Summary$Timestamp
+eye_data[, 2:5] <- sapply(eye_data[, 2:5], as.double)
+
+eye_data <- st_as_sf(eye_data,coords = c("WorldGazeHitPositionX","WorldGazeHitPositionY","WorldGazeHitPositionZ"),remove = F)
+eye_data <- eye_data %>%
+  group_by(file_path) %>%
+  dplyr::mutate(
+    lead = geometry[(dplyr::row_number()) + 1],
+    dist = st_distance(geometry, lead, by_element = T),
+  )
+
+sample_Summary$eyedist <- eye_data$dist
 ```
 
 
@@ -263,6 +285,16 @@ r_sample_Window %>%
     ylab("Hand movement") +
     geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
 
+subset <- r_sample_Window
+subset <- subset %>% filter(Timestamp > 30)
+subset %>%
+  ggplot( aes(x=Timestamp, y=eyedist, group=factor(file_path), color=factor(file_path))) +
+    geom_line() +
+    scale_fill_discrete(labels = c(c(unique(subset$file_path)))) + 
+    ggtitle("Total left eye movement over time") +
+    theme_ipsum() +
+    ylab("Eye movement") 
+    #geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
 
 
 r_event_Window %>%
@@ -297,7 +329,7 @@ physio_test <- physio_test %>% dplyr::group_by(file_path) %>% dplyr::select(-EDA
 ```{r Heart Rate Measures HRV, message=FALSE, warning=FALSE, frequency measures), echo=FALSE, include=F, results='hide'}
 #DF for HRV
 IBI_DF <- filter(physiological_Summary, IBI > -1 & IBI > 401 & IBI <= 1500)
-IBI_DF <- filter(IBI_DF, file_path == "1")
+IBI_DF <- filter(IBI_DF, file_path == "20")
 
 IBI_DF$beats = as.numeric(difftime(IBI_DF$Timestamp, IBI_DF$Timestamp[1] , units ="secs"))
 
