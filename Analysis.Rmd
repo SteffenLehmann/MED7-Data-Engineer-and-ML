@@ -38,6 +38,7 @@ library(caret)
 library(data.table)
 library(viridis)
 library(hrbrthemes)
+library(eyetrackingR)
 ```
 
 ```{python Loading packages, include=FALSE}
@@ -144,6 +145,24 @@ event_data <- event_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(Spa
 
 event_data <- event_data %>% replace(is.na(.), 0)
 event_data <- event_data %>% replace(is.null(.), 0)
+```
+
+```{r Eye trackubg loss analysis, echo=FALSE,message=F, warning=F,results='hide', include=F}
+eye_data <- sample_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(GazeConfidence, WorldGazeHitPositionX, WorldGazeHitPositionY, WorldGazeHitPositionZ)
+eye_data[eye_data == "NULL"] <- "0.0000"
+eye_data$Timestamp <- sample_Summary$Timestamp
+eye_data[, 2:5] <- sapply(eye_data[, 2:5], as.double)
+
+eye_data <- eye_data %>%
+  dplyr::mutate(TrackLoss = dplyr::case_when(WorldGazeHitPositionX == 0 ~ TRUE,
+                                             TRUE ~ FALSE))
+
+#eye_data[eye_data == TRUE] <- "TRUE"
+test <- eye_data %>% dplyr::group_by(TrackLoss, file_path) %>% dplyr::summarise(Number=(n())) 
+test2 <- count(eye_data, "file_path")
+test <- test %>% filter(TrackLoss == TRUE)
+test$percentage <- (test$Number / test2$freq) * 100
+
 ```
 
 ```{r Hand tracking data, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -254,18 +273,20 @@ r_sample_Window <- py$py_sliding_samples
 
 r_sample_Window$Timestamp = row.names(r_sample_Window)
 r_sample_Window$Timestamp = ave(r_sample_Window$headdist, r_sample_Window$file_path, FUN = seq_along)
+r_sample_Window <- r_sample_Window %>% dplyr::select(Timestamp, file_path, headdist, eyedist, righthanddist, lefthanddist)
 
 r_event_Window$Timestamp = row.names(r_event_Window)
 r_event_Window$Timestamp = ave(r_event_Window$Hits, r_event_Window$file_path, FUN = seq_along)
 
-r_sample_Window %>%
+subset <- r_sample_Window
+subset <- subset %>% filter(Timestamp > 30)
+subset %>%
   ggplot( aes(x=Timestamp, y=headdist, group=factor(file_path), color=factor(file_path))) +
-    #geom_line() +
+    geom_line() +
     #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
     ggtitle("Total head movement over time") +
     theme_ipsum() +
-    ylab("Head movement") +
-    geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
+    ylab("Head movement") + geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
 
 r_sample_Window %>%
   ggplot( aes(x=Timestamp, y=righthanddist, group=factor(file_path), color=factor(file_path))) +
@@ -274,7 +295,7 @@ r_sample_Window %>%
     ggtitle("Total right hand movement over time") +
     theme_ipsum() +
     ylab("Hand movement") +
-    geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
+    #geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
 
 r_sample_Window %>%
   ggplot( aes(x=Timestamp, y=lefthanddist, group=factor(file_path), color=factor(file_path))) +
@@ -291,21 +312,22 @@ subset %>%
   ggplot( aes(x=Timestamp, y=eyedist, group=factor(file_path), color=factor(file_path))) +
     geom_line() +
     scale_fill_discrete(labels = c(c(unique(subset$file_path)))) + 
-    ggtitle("Total left eye movement over time") +
+    ggtitle("Total eye movement over time") +
     theme_ipsum() +
     ylab("Eye movement") 
     #geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
 
-
-r_event_Window %>%
+subset <- r_event_Window
+subset <- subset %>% filter(Timestamp > 60)
+subset %>%
   filter(Timestamp != c(1:30)) %>%
   ggplot( aes(x=Timestamp, y=Hits, group=factor(file_path), color=factor(file_path))) +
     geom_line() +
     #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
     ggtitle("Total hits over time") +
     theme_ipsum() +
-    ylab("Hits") +
-    geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
+    ylab("Hits") 
+    #geom_smooth(aes(method = "lm", se = FALSE)
 ```
 
 ```{r Pre-processing of Physiological data, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -372,17 +394,29 @@ sample_Summary %>%
 
 ```
 
-```{r Aggregation of DF's, echo=FALSE,message=F, warning=F,results='hide', include=F}
+```{r merging and standardizing of DF's, echo=FALSE,message=F, warning=F,results='hide', include=F}
 # https://statisticsglobe.com/merge-data-frames-by-two-id-columns-in-r 
-class(event_Summary)
-class(sample_Summary)
-class(physio_test)
-
-event_data$second <- floor(event_data$second)
-physio_test$second <- floor(physio_test$second)
 
 # https://statisticsglobe.com/r-dplyr-join-inner-left-right-full-semi-anti
-AggDF <- left_join(event_data, physio_test, by = c("file_path","minute", "second"))
+AggDF <- left_join(r_sample_Window, r_event_Window, by = c("file_path", "Timestamp"))
+AggDF <- AggDF %>% dplyr::select(-minute, -second)
+
+AggDFeven <- AggDF %>% filter(file_path %% 2 == 0)
+AggDFeven$condition <- "VE"
+AggDFodd <- AggDF %>% filter(file_path %% 2 != 0)
+AggDFodd$condition <- "No VE"
+
+gamedf <- rbind(AggDFodd, AggDFeven)
+```
+
+```{r correlation checks, include=FALSE}
+corMatMy <- cor(gamedf[,3:14])
+corrplot(corMatMy, order = "hclust", tl.cex = 0.7)
+highlyCor <- colnames(gamedf)[findCorrelation(corMatMy, cutoff = 0.9, verbose = TRUE)]
+gamedf_corr <- gamedf[, which(!colnames(gamedf) %in% highlyCor)]
+```
+
+```{r pca stuff, include=FALSE}
 
 ```
 
@@ -475,47 +509,5 @@ ggplot(pve_table2, aes(x = comp, y = cum_pve2)) +
   geom_abline(intercept = 0.95, color = "red", slope = 0)
 pca2_df <- as.data.frame(questionnaire.pca2$x)
 ggplot(pca2_df, aes(x=PC1, y=PC2, col=df_questionnaire$VE)) + geom_point(alpha=0.5)
-```
-
-```{python}
-
-
-#py_dfSummary = r.dfSummary
-#x = py_dfSummary["EDA"]
-#y = py_dfSummary["IBI"]
-#plt.scatter(x, y)
-#plt.show()
-
-py_dsSummary = r.sample_Summary
-x2 = py_dsSummary["RightControllerPosWorldX"]
-y2 = py_dsSummary["RightControllerPosWorldY"]
-users = py_dsSummary["Participant"]
-plt.scatter(x2, y2)
-plt.show()
-
-slope, intercept, p, r2, std_err = sc.linregress(x2, y2)
-
-def lr(x2):
-  return slope * x2 + intercept
-
-mymodel = list(map(lr, x2))
-
-p_df = pd.DataFrame(x2, y2, users)
-fig, ax = plt.subplots()
-bp = p_df.groupby("users").plot(kind="kde", ax=ax)
-
-
-plt.scatter(x2, y2)
-plt.plot(x2, mymodel)
-plt.show()
-
-```
-
-```{python}
-my_python_array = np.array([2,4,6,8])
-for item in my_python_array:
-    print(item)
-    
-exit
 ```
 
