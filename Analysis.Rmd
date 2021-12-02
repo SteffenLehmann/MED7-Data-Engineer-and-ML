@@ -239,6 +239,7 @@ eye_data <- eye_data %>%
 
 sample_Summary$eyedist <- eye_data$dist
 ```
+
 ```{python Sliding for event logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
 py_event = r.event_data
 py_event_data = pd.DataFrame(py_event)
@@ -313,19 +314,19 @@ subset <- subset %>% filter(Timestamp > 30)
 subset %>%
   ggplot( aes(x=Timestamp, y=headdist, group=factor(file_path), color=factor(file_path))) +
     geom_line() +
-    #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
+    scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
     ggtitle("Total head movement over time") +
     theme_ipsum() +
-    ylab("Head movement") + geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
+    ylab("Head movement")# + geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
 
 r_sample_Window %>%
   ggplot( aes(x=Timestamp, y=righthanddist, group=factor(file_path), color=factor(file_path))) +
-    #geom_line() +
-    #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
+   geom_line() +
+   scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
     ggtitle("Total right hand movement over time") +
     theme_ipsum() +
     ylab("Hand movement") +
-    #geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
+    geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
 
 r_sample_Window %>%
   ggplot( aes(x=Timestamp, y=lefthanddist, group=factor(file_path), color=factor(file_path))) +
