@@ -373,9 +373,8 @@ subset %>%
 
 
 #Old version
-IBI_DF <- filter(IBI_DF, file_path == "1")
-=======
-IBI_DF <- filter(IBI_DF, file_path == "20")
+IBI_DF <- filter(physio_DF, file_path == "1")
+
 
 IBI_DF$beats = as.numeric(difftime(IBI_DF$Timestamp, IBI_DF$Timestamp[1] , units ="secs"))
 IBI_Vector <- IBI_DF$beats
@@ -384,7 +383,7 @@ IBI_Vector <- IBI_DF$beats
 
 hrv.data = CreateHRVData()
 hrv.data = SetVerbose(hrv.data, FALSE )
-hrv.data = AddEpisodes(hrv.data, InitTimes = c(0,300,500), Tags = c("A","B","C"), Durations = c(300,200,130), Values = c(0,0,0))
+hrv.data = AddEpisodes(hrv.data, InitTimes = c(13,300,500), Tags = c("A","B","C"), Durations = c(300,200,130), Values = c(0,0,0))
 #Loads the position in time of each beat
 hrv.data = LoadBeatVector(hrv.data, IBI_Vector)
 #HRV time series. Build Non Interpolated Heart Rate
@@ -399,6 +398,7 @@ hrv.data = InterpolateNIHR (hrv.data, freqhr = 4)
 #   Interpolated instantaneous heart rate
 #PlotHR(hrv.data)
 #Time-domain analysis techniques
+#TODO create new episodic vectors for the time domain
 hrv.data = CreateTimeAnalysis(hrv.data, size = 30, interval = 7.8125)
 
 #Frequency-domain analysis techniques
@@ -407,7 +407,7 @@ hrv.data = CalculatePowerBand(hrv.data, indexFreqAnalysis= 1, size = 30, sizesp 
 #Time domain
 hrv.data$TimeAnalysis[[1]]$SDNN #SDNN
 hrv.data$TimeAnalysis[[1]]$rMSSD #rMSSD
-#Frequency domain
+#Frequency domain. the vector lenght is seconds and the missing rows(26) are the artefacts from the windowing, so the vector is missing 13 rows in each end
 LF <- hrv.data$FreqAnalysis[[1]]$LF # LF
 HF <- hrv.data$FreqAnalysis[[1]]$HF #HF
 LFHF <- hrv.data$FreqAnalysis[[1]]$LFHF #LFHF
