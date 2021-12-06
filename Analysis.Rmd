@@ -44,6 +44,8 @@ library(eyetrackingR)
 ```{python Loading packages, include=FALSE}
 import numpy as np
 import pandas as pd
+import pandas as pd
+pd.options.mode.chained_assignment = None 
 import matplotlib.pyplot as plt
 from scipy import stats as sc
 import sklearn
@@ -141,10 +143,12 @@ event_Summary <- event_Summary %>% filter(Event != "Wall Size Update", Event != 
 ```
 
 ```{r Compiling event data for sliding window, echo=FALSE,message=F, warning=F,results='hide', include=F}
-event_data <- event_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(SpawnedMole, SpawnedFakeMole, Shots, Misses, Hits, RedHit, Mole_Expired,  Fake_Mole_Expired, file_path, Timestamp, minute, second,)
+event_data <- event_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(SpawnedMole, SpawnedFakeMole, Shots, Misses, Hits, RedHit, Mole_Expired,  Fake_Mole_Expired, file_path, Timestamp, minute, second, MoleActivatedDuration)
 
 event_data <- event_data %>% replace(is.na(.), 0)
 event_data <- event_data %>% replace(is.null(.), 0)
+event_data$MoleActivatedDuration[event_data$MoleActivatedDuration == "NULL"] <- 0
+event_data$MoleActivatedDuration[event_data$MoleActivatedDuration == "5.0000"] <- 0
 ```
 
 ```{r Pre-processing of physiological logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -221,6 +225,23 @@ head.df <- head.df %>%
   )
 
 sample_Summary$headdist <- head.df$dist
+
+
+headrot.df <- data.frame( x = sample_Summary$HeadCameraRotEulerX,
+y = sample_Summary$HeadCameraRotEulerY,
+z = sample_Summary$HeadCameraRotEulerZ,
+group = sample_Summary$file_path)
+
+headrot.df <- st_as_sf(headrot.df,coords = c("x","y","z"),remove = F)
+
+headrot.df <- headrot.df %>%
+  group_by(group) %>%
+  dplyr::mutate(
+    lead = geometry[(dplyr::row_number()) + 1],
+    dist = st_distance(geometry, lead, by_element = T),
+  )
+
+sample_Summary$headrot <- headrot.df$dist
 ```
 
 ```{r eye tracking data, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -250,11 +271,13 @@ py_sliding_events = pd.DataFrame
 py_event_data["file_path"] = pd.to_numeric(py_event_data["file_path"])
 py_event_data.index = pd.to_datetime(py_event_data["Timestamp"])
 
+py_event_data["MoleActivatedDuration"] = pd.to_numeric(py_event_data["MoleActivatedDuration"])
+
 py_windowed_events = py_event_data.groupby("file_path").resample("1s").sum()
 py_windowed_events["file_path"] = py_windowed_events.index.get_level_values(0)
 py_windowed_events["Timestamp"] = py_windowed_events.index.get_level_values(1)
 
-py_sliding_events = py_windowed_events.set_index("Timestamp").rolling("30s").sum()
+py_sliding_events = py_windowed_events.set_index("Timestamp").rolling("30s", min_periods = 30).sum()
 py_sliding_events["file_path"] = py_windowed_events.index.get_level_values(0)
 
 ```
@@ -273,7 +296,7 @@ py_windowed_samples = py_sample_data.groupby("file_path").resample("1s").sum()
 py_windowed_samples["file_path"] = py_windowed_samples.index.get_level_values(0)
 py_windowed_samples["Timestamp"] = py_windowed_samples.index.get_level_values(1)
 
-py_sliding_samples = py_windowed_samples.set_index("Timestamp").rolling("30s").sum()
+py_sliding_samples = py_windowed_samples.set_index("Timestamp").rolling("30s", min_periods = 30).sum()
 py_sliding_samples["file_path"] = py_windowed_samples.index.get_level_values(0)
 
 ```
@@ -285,46 +308,41 @@ window = "30s"
 py_windowed_physio = pd.DataFrame
 py_sliding_physio = pd.DataFrame
 
-#py_windowed_physio = py_physio_Data.groupby("file_path")
-#py_physio_Data = py_physio_Data.assign(cvnni = 0)
-#py_physio_Data = py_physio_Data.assign(cvsd = 0)
-#py_physio_Data = py_physio_Data.assign(max_hr = 0)
-#py_physio_Data = py_physio_Data.assign(mean_nni = 0)
-#py_physio_Data = py_physio_Data.assign(median_nni = 0)
-#py_physio_Data = py_physio_Data.assign(min_hr = 0)
-#py_physio_Data = py_physio_Data.assign(nni_20 = 0)
-#py_physio_Data = py_physio_Data.assign(nni_50 = 0)
-#py_physio_Data = py_physio_Data.assign(pnni_20 = 0)
-#py_physio_Data = py_physio_Data.assign(range_nni = 0)
-#py_physio_Data = py_physio_Data.assign(rmssd = 0)
-#py_physio_Data = py_physio_Data.assign(sdnn = 0)
-#py_physio_Data = py_physio_Data.assign(sdsd = 0)
-#py_physio_Data = py_physio_Data.assign(std_hr = 0)
-#py_physio_Data = py_physio_Data.assign(mean_hr = 0)
-#py_physio_Data = py_physio_Data.assign(pnni_50 = 0)
+py_physio_Data = py_physio_Data.assign(max_hr = 0)
+py_physio_Data = py_physio_Data.assign(mean_nni = 0)
+py_physio_Data = py_physio_Data.assign(median_nni = 0)
+py_physio_Data = py_physio_Data.assign(min_hr = 0)
+py_physio_Data = py_physio_Data.assign(nni_50 = 0)
+py_physio_Data = py_physio_Data.assign(rmssd = 0)
+py_physio_Data = py_physio_Data.assign(sdnn = 0)
+py_physio_Data = py_physio_Data.assign(pnni_50 = 0)
 
 py_physio_Data["file_path"] = pd.to_numeric(py_physio_Data["file_path"])
-py_physio_Data = py_physio_Data[py_physio_Data.file_path == 1]
 py_physio_Data.index = pd.to_datetime(py_physio_Data["Timestamp"])
+namearray = ["max_hr","mean_nni","median_nni","min_hr","nni_50","rmssd","sdnn","pnni_50"]
 
-
-def calc_time(window):
-  print(hrv.get_time_domain_features(window))
+def calc_time(window, name):
+  time_domain = hrv.get_time_domain_features(np.array(window))
   print("========")
-  return np.std(window)
+  return time_domain[name]
 
 
-py_physio_Data["IBI"].rolling("30s", min_periods = 30).apply(func = calc_time)
+test2 = pd.DataFrame(data = None, columns=py_physio_Data.columns)
+for s in range(1, 21):
+  test = py_physio_Data[py_physio_Data["file_path"] == s]
+  for i in namearray:
+      test[i] = test["IBI"].rolling("30s", min_periods = 30).apply(func = calc_time, kwargs={'name':i})
+      print("HEY I AM DONE)))))))))))))))))))))))))))))))))))")
+  test2 = pd.concat([test2, test])
+      
+  
+
+#py_physio_Data = py_physio_Data[py_physio_Data.file_path == 2]
 
 
+#py_windowed_physio["file_path"] = py_windowed_physio.index.get_level_values(0)
+#py_windowed_physio["Timestamp"] = py_windowed_physio.index.get_level_values(1)
 
-pd.rolling_apply(py_physio_Data["IBI"], "30s", hrv.get_time_domain_features)
-
-test = pd.DataFrame(py_physio_Data.apply(func = hrv.get_time_domain(py_physio_Data["IBI"])).rolling("30s"))
-py_windowed_physio["file_path"] = py_windowed_physio.index.get_level_values(0)
-py_windowed_physio["Timestamp"] = py_windowed_physio.index.get_level_values(1)
-
-#py_sliding_physio = py_windowed_physio.set_index("Timestamp").rolling("30s").mean()
 #py_sliding_physio["file_path"] = py_windowed_physio.index.get_level_values(0)
 
 ```
@@ -336,7 +354,7 @@ r_physio_Window <- py$py_windowed_physio
 
 r_sample_Window$Timestamp = row.names(r_sample_Window)
 r_sample_Window$Timestamp = ave(r_sample_Window$headdist, r_sample_Window$file_path, FUN = seq_along)
-r_sample_Window <- r_sample_Window %>% dplyr::select(Timestamp, file_path, headdist, eyedist, righthanddist, lefthanddist)
+r_sample_Window <- r_sample_Window %>% dplyr::select(Timestamp, file_path, headdist, eyedist, righthanddist, lefthanddist, headrot)
 
 r_event_Window$Timestamp = row.names(r_event_Window)
 r_event_Window$Timestamp = ave(r_event_Window$Hits, r_event_Window$file_path, FUN = seq_along)
