@@ -46,13 +46,13 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy import stats as sc
-
-import os
-import collections
-import msgpack
-import Serialized_Dict
+import sklearn
+import biosppy
+import matplotlib
+import nolds
+import pypi
+import hrvanalysis as hrv
 ```
-
 
 ```{r logData, echo=FALSE,message=F, warning=F,results='hide', include=F}
 df_questionnaire <- read.table("Questionnaire_data.csv", header=TRUE, fill = FALSE, sep=",")
@@ -159,7 +159,7 @@ physio_DF <- physio_DF %>% dplyr::group_by(file_path) %>% dplyr::select(-EDA, -m
 names(physio_DF)[names(physio_DF) == "SmoothedEDA"] <- "EDA"  
 ```
 
-```{r Eye trackubg loss analysis, echo=FALSE,message=F, warning=F,results='hide', include=F}
+```{r Eye tracking loss analysis, echo=FALSE,message=F, warning=F,results='hide', include=F}
 eye_data <- sample_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(GazeConfidence, WorldGazeHitPositionX, WorldGazeHitPositionY, WorldGazeHitPositionZ)
 eye_data[eye_data == "NULL"] <- "0.0000"
 eye_data$Timestamp <- sample_Summary$Timestamp
@@ -285,10 +285,42 @@ window = "30s"
 py_windowed_physio = pd.DataFrame
 py_sliding_physio = pd.DataFrame
 
+#py_windowed_physio = py_physio_Data.groupby("file_path")
+#py_physio_Data = py_physio_Data.assign(cvnni = 0)
+#py_physio_Data = py_physio_Data.assign(cvsd = 0)
+#py_physio_Data = py_physio_Data.assign(max_hr = 0)
+#py_physio_Data = py_physio_Data.assign(mean_nni = 0)
+#py_physio_Data = py_physio_Data.assign(median_nni = 0)
+#py_physio_Data = py_physio_Data.assign(min_hr = 0)
+#py_physio_Data = py_physio_Data.assign(nni_20 = 0)
+#py_physio_Data = py_physio_Data.assign(nni_50 = 0)
+#py_physio_Data = py_physio_Data.assign(pnni_20 = 0)
+#py_physio_Data = py_physio_Data.assign(range_nni = 0)
+#py_physio_Data = py_physio_Data.assign(rmssd = 0)
+#py_physio_Data = py_physio_Data.assign(sdnn = 0)
+#py_physio_Data = py_physio_Data.assign(sdsd = 0)
+#py_physio_Data = py_physio_Data.assign(std_hr = 0)
+#py_physio_Data = py_physio_Data.assign(mean_hr = 0)
+#py_physio_Data = py_physio_Data.assign(pnni_50 = 0)
+
 py_physio_Data["file_path"] = pd.to_numeric(py_physio_Data["file_path"])
+py_physio_Data = py_physio_Data[py_physio_Data.file_path == 1]
 py_physio_Data.index = pd.to_datetime(py_physio_Data["Timestamp"])
 
-py_windowed_physio = py_physio_Data.groupby("file_path").resample("1s").mean()
+
+def calc_time(window):
+  print(hrv.get_time_domain_features(window))
+  print("========")
+  return np.std(window)
+
+
+py_physio_Data["IBI"].rolling("30s", min_periods = 30).apply(func = calc_time)
+
+
+
+pd.rolling_apply(py_physio_Data["IBI"], "30s", hrv.get_time_domain_features)
+
+test = pd.DataFrame(py_physio_Data.apply(func = hrv.get_time_domain(py_physio_Data["IBI"])).rolling("30s"))
 py_windowed_physio["file_path"] = py_windowed_physio.index.get_level_values(0)
 py_windowed_physio["Timestamp"] = py_windowed_physio.index.get_level_values(1)
 
@@ -375,7 +407,7 @@ subset %>%
 
 #Old version
 IBI_DF <- filter(IBI_DF, file_path == "1")
-=======
+
 IBI_DF <- filter(IBI_DF, file_path == "20")
 
 IBI_DF$beats = as.numeric(difftime(IBI_DF$Timestamp, IBI_DF$Timestamp[1] , units ="secs"))
