@@ -1,0 +1,54 @@
+---
+title: "ML"
+author: "HZ"
+date: "08/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen=999)
+library(ggplot2)
+library(tidyverse)
+library(tidymodels)
+library(skimr)
+library(stringr)
+library(corrplot)
+library(RColorBrewer)
+library("PerformanceAnalytics")
+library("Hmisc")
+library(Rmisc)
+library(lubridate)
+library(ggbeeswarm)
+library(GGally)
+library(effsize)
+library(magrittr)
+library(dplyr)
+library(reticulate)
+library(raster)
+library(sf)
+library(TTR)
+library(RHRV)
+library(corrplot)
+library(Hmisc)
+library(caret)
+library(data.table)
+library(viridis)
+library(hrbrthemes)
+library(eyetrackingR)
+```
+
+```{python Loading packages, include=FALSE}
+import numpy as np
+import pandas as pd
+import pandas as pd
+pd.options.mode.chained_assignment = None 
+import matplotlib.pyplot as plt
+from scipy import stats as sc
+import sklearn
+import biosppy
+import matplotlib
+import nolds
+import pypi
+import hrvanalysis as hrv
+```
