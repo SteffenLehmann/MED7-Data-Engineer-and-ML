@@ -159,8 +159,7 @@ physio_DF <- physio_DF %>% group_by(file_path) %>% mutate(SmoothedEDA = runMean(
 #computing the mean for each NA value
 physio_DF$SmoothedEDA[is.na(physio_DF$SmoothedEDA)]<-mean(physio_DF$SmoothedEDA, na.rm = T)
 physio_DF[physio_DF == 0] <- NA
-physio_DF <- physio_DF %>% dplyr::group_by(file_path) %>% dplyr::select(-EDA, -minute, -second)#, -Timestamp
-names(physio_DF)[names(physio_DF) == "SmoothedEDA"] <- "EDA"  
+physio_DF <- physio_DF %>% dplyr::group_by(file_path) %>% dplyr::select(-minute, -second)#, -Timestamp
 ```
 
 ```{r Eye tracking loss analysis, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -323,7 +322,6 @@ namearray = ["max_hr","mean_nni","median_nni","min_hr","nni_50","rmssd","sdnn","
 
 def calc_time(window, name):
   time_domain = hrv.get_time_domain_features(np.array(window))
-  print("========")
   return time_domain[name]
 
 
@@ -332,25 +330,42 @@ for s in range(1, 21):
   test = py_physio_Data[py_physio_Data["file_path"] == s]
   for i in namearray:
       test[i] = test["IBI"].rolling("30s", min_periods = 30).apply(func = calc_time, kwargs={'name':i})
-      print("HEY I AM DONE)))))))))))))))))))))))))))))))))))")
   test2 = pd.concat([test2, test])
-      
   
+py_physio_Data = test2
 
-#py_physio_Data = py_physio_Data[py_physio_Data.file_path == 2]
+py_physio_Data = py_physio_Data.assign(lf = 0)
+py_physio_Data = py_physio_Data.assign(hf = 0)
+py_physio_Data = py_physio_Data.assign(lf_hf_ratio = 0)
+py_physio_Data = py_physio_Data.assign(lfnu = 0)
+py_physio_Data = py_physio_Data.assign(hfnu = 0)
+py_physio_Data = py_physio_Data.assign(total_power = 0)
+py_physio_Data = py_physio_Data.assign(vlf = 0)
+namearray = ["lf","hf","lf_hf_ratio","lfnu","hfnu","total_power","vlf"]
+
+def calc_freq(window, name):
+  freq_domain = hrv.get_frequency_domain_features(np.array(window))
+  print("========")
+  return freq_domain[name]
 
 
-#py_windowed_physio["file_path"] = py_windowed_physio.index.get_level_values(0)
-#py_windowed_physio["Timestamp"] = py_windowed_physio.index.get_level_values(1)
+test2 = pd.DataFrame(data = None, columns=py_physio_Data.columns)
+for s in range(1, 21):
+  test = py_physio_Data[py_physio_Data["file_path"] == s]
+  for i in namearray:
+      test[i] = test["IBI"].rolling("30s", min_periods = 30).apply(func = calc_freq, kwargs={'name':i})
+  test2 = pd.concat([test2, test])
+  
+py_physio_Data = test2
+py_physio_Data["EDA"] = py_physio_Data["EDA"].rolling(8, min_periods = 8).mean()
 
-#py_sliding_physio["file_path"] = py_windowed_physio.index.get_level_values(0)
 
 ```
 
 ```{r Sliding Window prototype check}
 r_event_Window <- py$py_sliding_events
 r_sample_Window <- py$py_sliding_samples
-r_physio_Window <- py$py_windowed_physio
+r_physio_Window <- py$py_physio_Data
 
 r_sample_Window$Timestamp = row.names(r_sample_Window)
 r_sample_Window$Timestamp = ave(r_sample_Window$headdist, r_sample_Window$file_path, FUN = seq_along)
@@ -358,6 +373,9 @@ r_sample_Window <- r_sample_Window %>% dplyr::select(Timestamp, file_path, headd
 
 r_event_Window$Timestamp = row.names(r_event_Window)
 r_event_Window$Timestamp = ave(r_event_Window$Hits, r_event_Window$file_path, FUN = seq_along)
+
+r_physio_Window$Timestamp = row.names(r_physio_Window)
+r_physio_Window$Timestamp = ave(r_physio_Window$EDA, r_physio_Window$file_path, FUN = seq_along)
 
 subset <- r_sample_Window
 subset <- subset %>% filter(Timestamp > 30)
