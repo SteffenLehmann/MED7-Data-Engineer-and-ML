@@ -411,63 +411,6 @@ subset %>%
     #geom_smooth(aes(method = "lm", se = FALSE)
 ```
 
-
-```{r Heart Rate Measures HRV, message=FALSE, warning=FALSE, frequency measures), echo=FALSE, include=F, results='hide'}
-
-
-#r_physio_Window$Timestamp = ave(r_physio_Window$headdist, r_physio_Window$file_path, FUN = seq_along)
-
-#beat_vectors<- r_physio_Window %>% split(.$file_path) %>% map(pull, Timestamp)
-
-#test23 = as.numeric(difftime(r_physio_Window$Timestamp, IBI_DF$r_physio_Window[1] , units ="secs"))
-
-
-
-#Old version
-IBI_DF <- filter(IBI_DF, file_path == "1")
-
-IBI_DF <- filter(IBI_DF, file_path == "20")
-
-IBI_DF$beats = as.numeric(difftime(IBI_DF$Timestamp, IBI_DF$Timestamp[1] , units ="secs"))
-IBI_Vector <- IBI_DF$beats
-
-# RHRV doc: https://rhrv.r-forge.r-project.org/tutorial/RHRV-quickstart.pdf
-
-hrv.data = CreateHRVData()
-hrv.data = SetVerbose(hrv.data, FALSE )
-hrv.data = AddEpisodes(hrv.data, InitTimes = c(0,300,500), Tags = c("A","B","C"), Durations = c(300,200,130), Values = c(0,0,0))
-#Loads the position in time of each beat
-hrv.data = LoadBeatVector(hrv.data, IBI_Vector)
-#HRV time series. Build Non Interpolated Heart Rate
-hrv.data = BuildNIHR(hrv.data)
-#A Filtering operation 
-#hrv.data = FilterNIHR(hrv.data)
-#Interpolating
-hrv.data = InterpolateNIHR (hrv.data, freqhr = 4)
-#Plotting
-#   Non−interpolated instantaneous heart rate
-#PlotNIHR(hrv.data)
-#   Interpolated instantaneous heart rate
-#PlotHR(hrv.data)
-#Time-domain analysis techniques
-hrv.data = CreateTimeAnalysis(hrv.data, size = 30, interval = 7.8125)
-
-#Frequency-domain analysis techniques
-hrv.data = CreateFreqAnalysis(hrv.data)
-hrv.data = CalculatePowerBand(hrv.data, indexFreqAnalysis= 1, size = 30, sizesp = 45, shift = 1, type = "fourier", ULFmin = 0, ULFmax = 0.03, VLFmin = 0.03, VLFmax = 0.05, LFmin = 0.05, LFmax = 0.15, HFmin = 0.15, HFmax = 0.4 )
-#Time domain
-hrv.data$TimeAnalysis[[1]]$SDNN #SDNN
-hrv.data$TimeAnalysis[[1]]$rMSSD #rMSSD
-#Frequency domain
-LF <- hrv.data$FreqAnalysis[[1]]$LF # LF
-HF <- hrv.data$FreqAnalysis[[1]]$HF #HF
-LFHF <- hrv.data$FreqAnalysis[[1]]$LFHF #LFHF
-
-PlotNIHR(hrv.data, Tag="all")
-test = PlotPowerBand(hrv.data, indexFreqAnalysis = 1, ymax = 5000, ymaxratio = 50,Tag = "all")
-
-```
-
 ```{r Overview, echo=FALSE,message=F, warning=F,results='hide', include=F}
 sample_Summary %>%
 physiological_Summary  %>%
