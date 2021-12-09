@@ -451,8 +451,10 @@ sample_Summary %>%
 # https://statisticsglobe.com/merge-data-frames-by-two-id-columns-in-r 
 
 # https://statisticsglobe.com/r-dplyr-join-inner-left-right-full-semi-anti
-AggDF <- left_join(r_sample_Window, r_event_Window, by = c("file_path", "Timestamp"))
-AggDF <- AggDF %>% dplyr::select(-minute, -second)
+AggDF <- left_join(r_physio_Window, r_sample_Window, by = c("file_path", "Timestamp"))
+AggDF <- left_join(AggDF, r_event_Window, by = c("file_path", "Timestamp"))
+AggDF <- AggDF %>% dplyr::select(-minute, -second) %>% na.omit()
+AggDF <- AggDF %>%na.omit()
 
 AggDFeven <- AggDF %>% filter(file_path %% 2 == 0)
 AggDFeven$condition <- "VE"
@@ -460,6 +462,10 @@ AggDFodd <- AggDF %>% filter(file_path %% 2 != 0)
 AggDFodd$condition <- "No VE"
 
 gamedf <- rbind(AggDFodd, AggDFeven)
+```
+
+```{r save to csv, echo=FALSE,message=F, warning=F,results='hide', include=F}
+write.csv(gamedf, "processed_data.csv", row.names = F)
 ```
 
 ```{r correlation checks, include=FALSE}
