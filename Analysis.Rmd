@@ -357,8 +357,12 @@ for s in range(1, 21):
   test2 = pd.concat([test2, test])
   
 py_physio_Data = test2
-py_physio_Data["EDA"] = py_physio_Data["EDA"].rolling(8, min_periods = 8).mean()
+py_physio_Data["EDA"] = py_physio_Data["EDA"].groupby("file_path").rolling(8, min_periods = 8).mean()
 
+py_physio_Data = py_physio_Data.groupby("file_path").resample("1s").mean()
+
+py_physio_Data["file_path"] = py_physio_Data.index.get_level_values(0)
+py_physio_Data["Timestamp"] = py_physio_Data.index.get_level_values(1)
 
 ```
 
