@@ -25,17 +25,14 @@ library(effsize)
 library(magrittr)
 library(dplyr)
 library(reticulate)
-library(raster)
-library(sf)
 library(TTR)
-library(RHRV)
 library(corrplot)
 library(Hmisc)
 library(caret)
 library(data.table)
 library(viridis)
 library(hrbrthemes)
-library(eyetrackingR)
+library(psycho)
 ```
 
 ```{python Loading packages, include=FALSE}
@@ -45,7 +42,9 @@ import pandas as pd
 pd.options.mode.chained_assignment = None 
 import matplotlib.pyplot as plt
 from scipy import stats as sc
-import sklearn
+import sklearn as sk
+import sklearn.preprocessing as pr
+import sklearn.decomposition as decomp
 import biosppy
 import matplotlib
 import nolds
@@ -57,9 +56,238 @@ import hrvanalysis as hrv
 data <- read.csv("processed_data.csv")
 ```
 
-```{r load in data, include=FALSE}
+```{python standardization, include=FALSE}
+py_data = pd.DataFrame(r.data)
 
+py_data1 = py_data.drop(['file_path', 'Timestamp', 'condition'], axis=1)
 
+scaler = pr.StandardScaler()
+scaled = scaler.fit(py_data1)
+scaled = pd.DataFrame(scaler.transform(py_data1), columns = py_data1.columns)
 
+scaled["file_path"] = py_data["file_path"]
+scaled["Timestamp"] = py_data["Timestamp"]
+scaled["condition"] = py_data["condition"]
 ```
 
+```{r save data into r, include=FALSE}
+raw_data <- py$py_data 
+scaled_data <- py$scaled
+
+raw_data_VE <- raw_data %>% filter(condition == "VE")
+raw_data_NOVE <- raw_data %>% filter(condition == "No VE")
+
+raw_data_nohrv <- raw_data[, 19:ncol(raw_data)]
+scaled_data_nohrv <- scaled_data[, 19:ncol(scaled_data)] 
+
+scaled_data_VE <- scaled_data %>% filter(condition == "VE") 
+scaled_data_NOVE <- scaled_data %>% filter(condition == "No VE")
+```
+
+```{python PCA on RAW data}
+py_raw = pd.DataFrame(r.raw_data)
+
+py_raw = py_raw.set_index("Timestamp")
+py_raw = py_raw.drop(["file_path", "condition"], axis=1)
+
+pca = decomp.PCA()
+py_rawPCA = pca.fit(py_raw)
+
+plt.clf()
+plot = plt.plot(np.cumsum(pca.explained_variance_ratio_))
+plt.xlabel('number of components')
+plt.ylabel('cumulative explained variance');
+plt.show()
+
+
+num_components = 5
+pca = decomp.PCA(num_components)
+py_rawPCA = pca.fit_transform(py_raw)
+
+my_raw_pca = pd.DataFrame(pca.components_, columns = py_raw.columns)
+
+n_pcs = pca.n_components_
+imp = [np.abs(pca.components_[i]).argmax() for i in range(n_pcs)]
+
+initial_feature_names = py_raw.columns
+
+most_important_names = [initial_feature_names[imp[i]] for i in range(n_pcs)]
+
+most_important_names
+```
+
+```{python PCA on SCALED data}
+py_scaled = pd.DataFrame(r.scaled_data)
+
+py_scaled = py_scaled.set_index("Timestamp")
+py_scaled = py_scaled.drop(["file_path", "condition"], axis=1)
+
+scaled_pca = decomp.PCA()
+py_scaledPCA = scaled_pca.fit(py_scaled)
+
+plt.clf()
+plt.plot(np.cumsum(scaled_pca.explained_variance_ratio_))
+plt.xlabel('number of components')
+plt.ylabel('cumulative explained variance');
+plt.show()
+
+
+num_components = 20
+scaled_pca = decomp.PCA(num_components)
+scaled = scaled_pca.fit_transform(py_scaled)
+
+my_scaled_pca = pd.DataFrame(scaled_pca.components_, columns = py_scaled.columns)
+
+n_pcs = scaled_pca.n_components_
+imp = [np.abs(scaled_pca.components_[i]).argmax() for i in range(n_pcs)]
+
+initial_feature_names = py_scaled.columns
+
+most_important_names = [initial_feature_names[imp[i]] for i in range(n_pcs)]
+
+most_important_names
+```
+
+```{python PCA on raw data without physio measures}
+py_raw_nophys = pd.DataFrame(r.raw_data_nohrv)
+
+py_raw_nophys = py_raw_nophys.set_index("Timestamp")
+py_raw_nophys = py_raw_nophys.drop(["file_path", "condition"], axis=1)
+
+pca = decomp.PCA()
+py_raw_nophys_PCA = pca.fit(py_raw_nophys)
+
+plt.clf()
+plt.plot(np.cumsum(pca.explained_variance_ratio_))
+plt.xlabel('number of components')
+plt.ylabel('cumulative explained variance');
+plt.show()
+
+
+num_components = 3
+pca = decomp.PCA(num_components)
+py_raw_nophys_PCA = pca.fit_transform(py_raw_nophys)
+
+my_physfree_pca = pd.DataFrame(pca.components_, columns =py_raw_nophys.columns)
+
+n_pcs = pca.n_components_
+imp = [np.abs(pca.components_[i]).argmax() for i in range(n_pcs)]
+
+initial_feature_names = py_raw_nophys.columns
+
+most_important_names = [initial_feature_names[imp[i]] for i in range(n_pcs)]
+
+most_important_names
+```
+
+```{python PCA on scaled data without physio measures}
+py_scaled_nophys = pd.DataFrame(r.scaled_data_nohrv)
+
+py_scaled_nophys = py_scaled_nophys.set_index("Timestamp")
+py_scaled_nophys = py_scaled_nophys.drop(["file_path", "condition"], axis=1)
+
+pca = decomp.PCA()
+py_scaled_nophys_PCA = pca.fit(py_scaled_nophys)
+
+plt.clf()
+plt.plot(np.cumsum(pca.explained_variance_ratio_))
+plt.xlabel('number of components')
+plt.ylabel('cumulative explained variance');
+plt.show()
+
+
+num_components = 8
+pca = decomp.PCA(num_components)
+py_scaled_nophys_PCA = pca.fit_transform(py_scaled_nophys)
+
+my_physfree_pca = pd.DataFrame(pca.components_, columns =py_scaled_nophys.columns)
+
+n_pcs = pca.n_components_
+imp = [np.abs(pca.components_[i]).argmax() for i in range(n_pcs)]
+
+initial_feature_names = py_scaled_nophys.columns
+
+most_important_names = [initial_feature_names[imp[i]] for i in range(n_pcs)]
+
+most_important_names
+```
+
+```{python PCA on raw data seperated by condition}
+py_raw_ve = pd.DataFrame(r.raw_data_VE)
+py_raw_ve = py_raw_ve.set_index("Timestamp")
+py_raw_ve = py_raw_ve.drop(["file_path", "condition"], axis=1)
+pca = decomp.PCA()
+py_raw_ve_PCA = pca.fit(py_raw_ve)
+plt.clf()
+plt.plot(np.cumsum(pca.explained_variance_ratio_))
+plt.xlabel('number of components')
+plt.ylabel('cumulative explained variance');
+plt.show()
+num_components = 4
+pca = decomp.PCA(num_components)
+py_raw_ve_PCA = pca.fit_transform(py_raw_ve)
+n_pcs = pca.n_components_
+imp = [np.abs(pca.components_[i]).argmax() for i in range(n_pcs)]
+initial_feature_names = py_raw_ve.columns
+most_important_names = [initial_feature_names[imp[i]] for i in range(n_pcs)]
+most_important_names
+
+py_raw_nove = pd.DataFrame(r.raw_data_NOVE)
+py_raw_nove = py_raw_nove.set_index("Timestamp")
+py_raw_nove = py_raw_nove.drop(["file_path", "condition"], axis=1)
+pca = decomp.PCA()
+py_raw_nove_PCA = pca.fit(py_raw_ve)
+plt.clf()
+plt.plot(np.cumsum(pca.explained_variance_ratio_))
+plt.xlabel('number of components')
+plt.ylabel('cumulative explained variance');
+plt.show()
+num_components = 4
+pca = decomp.PCA(num_components)
+py_raw_nove_PCA = pca.fit_transform(py_raw_nove)
+n_pcs = pca.n_components_
+imp = [np.abs(pca.components_[i]).argmax() for i in range(n_pcs)]
+initial_feature_names = py_raw_nove.columns
+most_important_names = [initial_feature_names[imp[i]] for i in range(n_pcs)]
+most_important_names
+```
+
+```{python PCA on scaled data seperated by condition}
+py_raw_ve = pd.DataFrame(r.scaled_data_VE)
+py_raw_ve = py_raw_ve.set_index("Timestamp")
+py_raw_ve = py_raw_ve.drop(["file_path", "condition"], axis=1)
+pca = decomp.PCA()
+py_raw_ve_PCA = pca.fit(py_raw_ve)
+plt.clf()
+plt.plot(np.cumsum(pca.explained_variance_ratio_))
+plt.xlabel('number of components')
+plt.ylabel('cumulative explained variance');
+plt.show()
+num_components = 20
+pca = decomp.PCA(num_components)
+py_raw_ve_PCA = pca.fit_transform(py_raw_ve)
+n_pcs = pca.n_components_
+imp = [np.abs(pca.components_[i]).argmax() for i in range(n_pcs)]
+initial_feature_names = py_raw_ve.columns
+most_important_names = [initial_feature_names[imp[i]] for i in range(n_pcs)]
+most_important_names
+
+py_raw_nove = pd.DataFrame(r.scaled_data_NOVE)
+py_raw_nove = py_raw_nove.set_index("Timestamp")
+py_raw_nove = py_raw_nove.drop(["file_path", "condition"], axis=1)
+pca = decomp.PCA()
+py_raw_nove_PCA = pca.fit(py_raw_ve)
+plt.clf()
+plt.plot(np.cumsum(pca.explained_variance_ratio_))
+plt.xlabel('number of components')
+plt.ylabel('cumulative explained variance');
+plt.show()
+num_components = 20
+pca = decomp.PCA(num_components)
+py_raw_nove_PCA = pca.fit_transform(py_raw_nove)
+n_pcs = pca.n_components_
+imp = [np.abs(pca.components_[i]).argmax() for i in range(n_pcs)]
+initial_feature_names = py_raw_nove.columns
+most_important_names = [initial_feature_names[imp[i]] for i in range(n_pcs)]
+most_important_names
+```
