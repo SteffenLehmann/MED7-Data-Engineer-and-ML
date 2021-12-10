@@ -93,6 +93,15 @@ df_event <- df_event %>% mutate(
 df_event <- df_event %>% dplyr::select(-Framecount, -SessionID, -Email, -ParticipantID)
 #df_event[df_event == 'NULL'] <- NA
 
+df_pupil <- list.files(recursive = TRUE, path = "./MED7 testLogs", pattern = "pupil",full.names = T) %>%
+map_dfr(read_csv, .id = "file_path") %>%
+group_by(file_path) %>%
+dplyr::mutate(ParticipantID = group_indices())
+
+pupil_summary <- df_pupil %>% dplyr::select(file_path, diameter, diameter_3d, pupil_timestamp)
+
+#df_event[df_event == 'NULL'] <- NA
+
 questionnaire_Summary <- df_questionnaire %>% dplyr::group_by(Participant) %>% dplyr::select(-Notes ) %>% na.omit()
 
 
@@ -177,6 +186,25 @@ test <- eye_data %>% dplyr::group_by(TrackLoss, file_path) %>% dplyr::summarise(
 test2 <- count(eye_data, "file_path")
 test <- test %>% filter(TrackLoss == TRUE)
 test$percentage <- (test$Number / test2$freq) * 100
+
+
+pupil_data <- pupil_summary %>% dplyr::group_by(file_path)
+pupil_data[pupil_data == NA] <- "0.0000"
+pupil_data <- sapply(pupil_data, as.double)
+pupil_data <- pupil_data %>% dplyr::mutate(TrackLoss1 = dplyr::case_when(diameter == 0 ~ TRUE, TRUE ~ FALSE))
+pupil_data <- pupil_data %>% dplyr::mutate(TrackLoss2 = dplyr::case_when(diameter_3d == 0 ~ TRUE, TRUE ~ FALSE))
+
+test <- pupil_data %>% dplyr::group_by(TrackLoss1, file_path) %>% dplyr::summarise(Number=(n())) 
+test2 <- count(pupil_data, "file_path")
+test <- test %>% filter(TrackLoss1 == TRUE)
+test$percentage <- (test$Number / test2$freq) * 100
+
+```
+
+```{r pupil data pre-process, echo=FALSE,message=F, warning=F,results='hide', include=F}
+pupil_summary$pupil_timestamp <- round(pupil_summary$pupil_timestamp)
+pupil_summary <- pupil_summary %>% filter(diameter < 101)
+pupiltest <- pupil_summary %>% group_by(file_path, pupil_timestamp) %>% mutate_each(funs(mean)) %>% distinct
 
 ```
 
@@ -272,12 +300,13 @@ py_event_data.index = pd.to_datetime(py_event_data["Timestamp"])
 
 py_event_data["MoleActivatedDuration"] = pd.to_numeric(py_event_data["MoleActivatedDuration"])
 
-py_windowed_events = py_event_data.groupby("file_path").resample("1s").sum()
+py_windowed_events = py_event_data.groupby("file_path").resample("1s").mean()
 py_windowed_events["file_path"] = py_windowed_events.index.get_level_values(0)
 py_windowed_events["Timestamp"] = py_windowed_events.index.get_level_values(1)
 
-py_sliding_events = py_windowed_events.set_index("Timestamp").rolling("30s", min_periods = 30).sum()
-py_sliding_events["file_path"] = py_windowed_events.index.get_level_values(0)
+py_sliding_events = py_windowed_events
+#py_sliding_events = py_windowed_events.set_index("Timestamp").rolling("30s", min_periods = 30).sum()
+#py_sliding_events["file_path"] = py_windowed_events.index.get_level_values(0)
 
 ```
 
@@ -291,12 +320,13 @@ py_sliding_samples = pd.DataFrame
 py_sample_data["file_path"] = pd.to_numeric(py_sample_data["file_path"])
 py_sample_data.index = pd.to_datetime(py_sample_data["Timestamp"])
 
-py_windowed_samples = py_sample_data.groupby("file_path").resample("1s").sum()
+py_windowed_samples = py_sample_data.groupby("file_path").resample("1s").mean()
 py_windowed_samples["file_path"] = py_windowed_samples.index.get_level_values(0)
 py_windowed_samples["Timestamp"] = py_windowed_samples.index.get_level_values(1)
 
-py_sliding_samples = py_windowed_samples.set_index("Timestamp").rolling("30s", min_periods = 30).sum()
-py_sliding_samples["file_path"] = py_windowed_samples.index.get_level_values(0)
+py_sliding_samples = py_windowed_samples
+#py_sliding_samples = py_windowed_samples.set_index("Timestamp").rolling("30s", min_periods = 30).sum()
+#py_sliding_samples["file_path"] = py_windowed_samples.index.get_level_values(0)
 
 ```
 
@@ -345,7 +375,6 @@ namearray = ["lf","hf","lf_hf_ratio","lfnu","hfnu","total_power","vlf"]
 
 def calc_freq(window, name):
   freq_domain = hrv.get_frequency_domain_features(np.array(window))
-  print("========")
   return freq_domain[name]
 
 
@@ -431,6 +460,16 @@ subset %>%
     theme_ipsum() +
     ylab("Hits") 
     #geom_smooth(aes(method = "lm", se = FALSE)
+
+pupiltest$Timestamp = ave(pupiltest$diameter, pupiltest$file_path, FUN = seq_along)
+pupiltest %>% 
+  ggplot( aes(x=Timestamp, y=diameter, group=factor(file_path), color=factor(file_path))) +
+    #geom_line() +
+    #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
+    ggtitle("pupil size") +
+    theme_ipsum() +
+    ylab("Diameter") +
+    geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
 ```
 
 ```{r Overview, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -465,6 +504,13 @@ gamedf <- rbind(AggDFodd, AggDFeven)
 ```
 
 ```{r save to csv, echo=FALSE,message=F, warning=F,results='hide', include=F}
+pupiltest$file_path <- as.numeric(pupiltest$file_path )
+gamedf <- left_join(gamedf, pupiltest, by = c("file_path", "Timestamp"))
+gamedf$righthanddist[gamedf$file_path == 14] <- gamedf$lefthanddist[gamedf$file_path == 14]
+
+gamedf <- gamedf %>% dplyr::select(-diameter_3d, -pupil_timestamp, -lefthanddist)
+
+
 write.csv(gamedf, "processed_data.csv", row.names = F)
 ```
 
