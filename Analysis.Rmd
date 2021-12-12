@@ -39,6 +39,10 @@ library(data.table)
 library(viridis)
 library(hrbrthemes)
 library(eyetrackingR)
+
+library("devtools")
+install_github("tmalsburg/saccades/saccades", dependencies=TRUE, force=TRUE)
+library(saccades)
 ```
 
 ```{python Loading packages, include=FALSE}
@@ -112,6 +116,8 @@ physiological_Summary <- df_physiological %>% dplyr::group_by(file_path) %>% dpl
 sample_Summary <- df_sample %>% dplyr::group_by(file_path)
 
 event_Summary <- df_event %>% dplyr::group_by(file_path) %>% dplyr::select(-TestId, -PlayedPattern)
+
+rm(df_questionnaire, df_physiological, df_sample, df_event, df_pupil)
 #dfSummary <-  dfSummary %>% merge(dsSummary, by = "Participant", all = T)
 ```
 
@@ -158,6 +164,8 @@ event_data <- event_data %>% replace(is.na(.), 0)
 event_data <- event_data %>% replace(is.null(.), 0)
 event_data$MoleActivatedDuration[event_data$MoleActivatedDuration == "NULL"] <- 0
 event_data$MoleActivatedDuration[event_data$MoleActivatedDuration == "5.0000"] <- 0
+
+rm(event_Summary)
 ```
 
 ```{r Pre-processing of physiological logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -169,6 +177,8 @@ physio_DF <- physio_DF %>% group_by(file_path) %>% mutate(SmoothedEDA = runMean(
 physio_DF$SmoothedEDA[is.na(physio_DF$SmoothedEDA)]<-mean(physio_DF$SmoothedEDA, na.rm = T)
 physio_DF[physio_DF == 0] <- NA
 physio_DF <- physio_DF %>% dplyr::group_by(file_path) %>% dplyr::select(-minute, -second)#, -Timestamp
+
+rm(physiological_Summary)
 ```
 
 ```{r Eye tracking loss analysis, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -189,7 +199,7 @@ test$percentage <- (test$Number / test2$freq) * 100
 
 
 pupil_data <- pupil_summary %>% dplyr::group_by(file_path)
-pupil_data[pupil_data == NA] <- "0.0000"
+pupil_data[is.na(pupil_data)] <- 0.0000
 pupil_data <- sapply(pupil_data, as.double)
 pupil_data <- pupil_data %>% dplyr::mutate(TrackLoss1 = dplyr::case_when(diameter == 0 ~ TRUE, TRUE ~ FALSE))
 pupil_data <- pupil_data %>% dplyr::mutate(TrackLoss2 = dplyr::case_when(diameter_3d == 0 ~ TRUE, TRUE ~ FALSE))
@@ -202,10 +212,60 @@ test$percentage <- (test$Number / test2$freq) * 100
 ```
 
 ```{r pupil data pre-process, echo=FALSE,message=F, warning=F,results='hide', include=F}
-pupil_summary$pupil_timestamp <- round(pupil_summary$pupil_timestamp)
-pupil_summary <- pupil_summary %>% filter(diameter < 101)
-pupiltest <- pupil_summary %>% group_by(file_path, pupil_timestamp) %>% mutate_each(funs(mean)) %>% distinct
+pupil_data <- pupil_summary %>% dplyr::group_by(file_path)
+pupil_data[is.na(pupil_data)] <- 0.0000
+pupil_data <- sapply(pupil_data, as.double)
 
+pupil_data <- data.frame(pupil_data)
+
+pupil_data["pupil_timestamp"] <- round(pupil_data$pupil_timestamp)
+pupil_data <- pupil_data %>% filter(diameter < 101)
+pupilmean <- pupil_data %>% group_by(file_path, pupil_timestamp) %>% mutate_each(funs(mean)) %>% distinct
+pupilmax <- pupil_data %>% group_by(file_path, pupil_timestamp) %>% mutate_each(funs(max)) %>% distinct
+pupilsd <- pupil_data %>% group_by(file_path, pupil_timestamp) %>% mutate_each(funs(sd)) %>% distinct
+
+pupilmean <- pupilmean %>%
+  dplyr::rename(
+    mean_diameter = diameter,
+    mean_diameter_3d = diameter_3d
+  )
+
+pupilmax <- pupilmax %>%
+  dplyr::rename(
+    max_diameter = diameter,
+    max_diameter_3d = diameter_3d
+  )
+
+pupilsd <- pupilsd %>%
+  dplyr::rename(
+    sd_diameter = diameter,
+    sd_diameter_3d = diameter_3d
+  )
+
+
+
+pupiltest <- pupil_data %>% group_by(file_path) %>% distinct(pupil_timestamp)
+pupiltest <- pupiltest %>% left_join(pupilmean, by = c("file_path", "pupil_timestamp"))
+pupiltest <- pupiltest %>% left_join(pupilmax, by = c("file_path", "pupil_timestamp"))
+pupiltest <- pupiltest %>% left_join(pupilsd, by = c("file_path", "pupil_timestamp"))
+
+rm(pupilmean, pupilmax, pupilsd)
+```
+
+```{r sccades and velocity, echo=FALSE,message=F, warning=F,results='hide', include=F}
+
+attempt <- sample_Summary %>% dplyr::select(file_path, contains("WorldGazeHitPosition"), Timestamp)
+
+attempt$Timestamp = as.numeric(ave(attempt$WorldGazeHitPositionX, attempt$file_path, FUN = seq_along))
+
+attempt <- attempt %>%
+  summarise(x= as.numeric(WorldGazeHitPositionX),
+            y= as.numeric(WorldGazeHitPositionY),
+            trial = file_path,
+            time= Timestamp)
+
+fix <- detect.fixations(attempt)
+head(fix)
 ```
 
 ```{r Hand tracking data, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -234,6 +294,8 @@ left.df <- left.df %>%
     dist = st_distance(geometry, lead, by_element = T),
   )
 sample_Summary$lefthanddist <- left.df$dist
+
+rm(right.df, left.df)
 ```
 
 ```{r Head tracking data, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -269,6 +331,8 @@ headrot.df <- headrot.df %>%
   )
 
 sample_Summary$headrot <- headrot.df$dist
+
+rm(head.df, headrot.df)
 ```
 
 ```{r eye tracking data, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -286,6 +350,8 @@ eye_data <- eye_data %>%
   )
 
 sample_Summary$eyedist <- eye_data$dist
+
+rm(eye_data)
 ```
 
 ```{python Sliding for event logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -300,13 +366,22 @@ py_event_data.index = pd.to_datetime(py_event_data["Timestamp"])
 
 py_event_data["MoleActivatedDuration"] = pd.to_numeric(py_event_data["MoleActivatedDuration"])
 
-py_windowed_events = py_event_data.groupby("file_path").resample("1s").mean()
-py_windowed_events["file_path"] = py_windowed_events.index.get_level_values(0)
-py_windowed_events["Timestamp"] = py_windowed_events.index.get_level_values(1)
+py_windowed_events_mean = py_event_data.groupby("file_path").resample("1s").mean().bfill()
+py_windowed_events_mean = py_windowed_events_mean.add_suffix('_mean')
+py_windowed_events_mean["file_path"] = py_windowed_events_mean.index.get_level_values(0)
+py_windowed_events_mean["Timestamp"] = py_windowed_events_mean.index.get_level_values(1)
 
-py_sliding_events = py_windowed_events
+py_windowed_events_sum = py_event_data.groupby("file_path").resample("1s").sum()
+py_windowed_events_sum = py_windowed_events_sum.add_suffix('_sum')
+py_windowed_events_sum["file_path"] = py_windowed_events_sum.index.get_level_values(0)
+py_windowed_events_sum["Timestamp"] = py_windowed_events_sum.index.get_level_values(1)
+
+py_sliding_events = pd.merge(py_windowed_events_sum.rename_axis([None, None]), py_windowed_events_mean.rename_axis([None, None]),  how='left', on =["Timestamp", "file_path"])
+#py_sliding_events = py_windowed_events
 #py_sliding_events = py_windowed_events.set_index("Timestamp").rolling("30s", min_periods = 30).sum()
 #py_sliding_events["file_path"] = py_windowed_events.index.get_level_values(0)
+
+py_sliding_events.isnull().sum()
 
 ```
 
@@ -320,14 +395,33 @@ py_sliding_samples = pd.DataFrame
 py_sample_data["file_path"] = pd.to_numeric(py_sample_data["file_path"])
 py_sample_data.index = pd.to_datetime(py_sample_data["Timestamp"])
 
-py_windowed_samples = py_sample_data.groupby("file_path").resample("1s").mean()
-py_windowed_samples["file_path"] = py_windowed_samples.index.get_level_values(0)
-py_windowed_samples["Timestamp"] = py_windowed_samples.index.get_level_values(1)
+py_windowed_samples_mean = py_sample_data.groupby("file_path").resample("1s").mean()
+py_windowed_samples_mean = py_windowed_samples_mean.add_suffix('_mean')
+py_windowed_samples_mean["file_path"] = py_windowed_samples_mean.index.get_level_values(0)
+py_windowed_samples_mean["Timestamp"] = py_windowed_samples_mean.index.get_level_values(1)
 
-py_sliding_samples = py_windowed_samples
+py_windowed_samples_sum = py_sample_data.groupby("file_path").resample("1s").sum()
+py_windowed_samples_sum = py_windowed_samples_sum.add_suffix('_sum')
+py_windowed_samples_sum["file_path"] = py_windowed_samples_sum.index.get_level_values(0)
+py_windowed_samples_sum["Timestamp"] = py_windowed_samples_sum.index.get_level_values(1)
+
+py_windowed_samples_min = py_sample_data.groupby("file_path").resample("1s").min()
+py_windowed_samples_min = py_windowed_samples_min.add_suffix('_min')
+py_windowed_samples_min["file_path"] = py_windowed_samples_min.index.get_level_values(0)
+py_windowed_samples_min["Timestamp"] = py_windowed_samples_min.index.get_level_values(1)
+
+py_windowed_samples_max = py_sample_data.groupby("file_path").resample("1s").max()
+py_windowed_samples_max = py_windowed_samples_max.add_suffix('_max')
+py_windowed_samples_max["file_path"] = py_windowed_samples_max.index.get_level_values(0)
+py_windowed_samples_max["Timestamp"] = py_windowed_samples_max.index.get_level_values(1)
+
+py_sliding_samples = pd.merge(py_windowed_samples_sum.rename_axis([None, None]), py_windowed_samples_mean.rename_axis([None, None]), how='left', on =["Timestamp", "file_path"])
+py_sliding_samples = pd.merge(py_sliding_samples, py_windowed_samples_min.rename_axis([None, None]), how='left', on =["Timestamp", "file_path"])
+py_sliding_samples = pd.merge(py_sliding_samples, py_windowed_samples_max.rename_axis([None, None]), how='left', on =["Timestamp", "file_path"])
 #py_sliding_samples = py_windowed_samples.set_index("Timestamp").rolling("30s", min_periods = 30).sum()
 #py_sliding_samples["file_path"] = py_windowed_samples.index.get_level_values(0)
 
+py_sliding_samples.isnull().sum()
 ```
 
 ```{python Sliding for physiological logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -362,6 +456,7 @@ for s in range(1, 21):
       test[i] = test["IBI"].rolling("30s", min_periods = 30).apply(func = calc_time, kwargs={'name':i})
   test2 = pd.concat([test2, test])
   
+  
 py_physio_Data = test2
 
 py_physio_Data = py_physio_Data.assign(lf = 0)
@@ -386,13 +481,16 @@ for s in range(1, 21):
   test2 = pd.concat([test2, test])
   
 py_physio_Data = test2
-py_physio_Data["EDA"] = py_physio_Data["EDA"].groupby("file_path").rolling(8, min_periods = 8).mean()
+#py_physio_Data["EDA"] = py_physio_Data["EDA"].groupby("file_path").rolling(8, min_periods = 8).mean()
 
-py_physio_Data = py_physio_Data.groupby("file_path").resample("1s").mean()
+py_physio_Data = py_physio_Data.dropna()
 
+py_physio_Data = py_physio_Data.groupby("file_path").resample("1s").mean().bfill()
 py_physio_Data["file_path"] = py_physio_Data.index.get_level_values(0)
 py_physio_Data["Timestamp"] = py_physio_Data.index.get_level_values(1)
 
+
+py_physio_Data.isnull().sum()
 ```
 
 ```{r Sliding Window prototype check}
@@ -401,75 +499,78 @@ r_sample_Window <- py$py_sliding_samples
 r_physio_Window <- py$py_physio_Data
 
 r_sample_Window$Timestamp = row.names(r_sample_Window)
-r_sample_Window$Timestamp = ave(r_sample_Window$headdist, r_sample_Window$file_path, FUN = seq_along)
-r_sample_Window <- r_sample_Window %>% dplyr::select(Timestamp, file_path, headdist, eyedist, righthanddist, lefthanddist, headrot)
+r_sample_Window$Timestamp = ave(r_sample_Window$headdist_sum, r_sample_Window$file_path, FUN = seq_along)
+r_sample_Window <- r_sample_Window %>% dplyr::select(Timestamp, file_path, contains("headdist"), contains("eyedist"), contains("righthanddist"), contains("lefthanddist"), contains("headrot"))
 
 r_event_Window$Timestamp = row.names(r_event_Window)
-r_event_Window$Timestamp = ave(r_event_Window$Hits, r_event_Window$file_path, FUN = seq_along)
+r_event_Window$Timestamp = ave(r_event_Window$Hits_sum, r_event_Window$file_path, FUN = seq_along)
 
 r_physio_Window$Timestamp = row.names(r_physio_Window)
 r_physio_Window$Timestamp = ave(r_physio_Window$EDA, r_physio_Window$file_path, FUN = seq_along)
 
-subset <- r_sample_Window
-subset <- subset %>% filter(Timestamp > 30)
-subset %>%
-  ggplot( aes(x=Timestamp, y=headdist, group=factor(file_path), color=factor(file_path))) +
-    geom_line() +
-    scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
-    ggtitle("Total head movement over time") +
-    theme_ipsum() +
-    ylab("Head movement")# + geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
+pupiltest$Timestamp = row.names(pupiltest)
+pupiltest$Timestamp = ave(pupiltest$mean_diameter, pupiltest$file_path, FUN = seq_along)
 
-r_sample_Window %>%
-  ggplot( aes(x=Timestamp, y=righthanddist, group=factor(file_path), color=factor(file_path))) +
-   geom_line() +
-   scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
-    ggtitle("Total right hand movement over time") +
-    theme_ipsum() +
-    ylab("Hand movement") +
-    geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
-
-r_sample_Window %>%
-  ggplot( aes(x=Timestamp, y=lefthanddist, group=factor(file_path), color=factor(file_path))) +
-    geom_line() +
-    #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
-    ggtitle("Total left hand movement over time") +
-    theme_ipsum() +
-    ylab("Hand movement") +
-    geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
-
-subset <- r_sample_Window
-subset <- subset %>% filter(Timestamp > 30)
-subset %>%
-  ggplot( aes(x=Timestamp, y=eyedist, group=factor(file_path), color=factor(file_path))) +
-    geom_line() +
-    scale_fill_discrete(labels = c(c(unique(subset$file_path)))) + 
-    ggtitle("Total eye movement over time") +
-    theme_ipsum() +
-    ylab("Eye movement") 
-    #geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
-
-subset <- r_event_Window
-subset <- subset %>% filter(Timestamp > 60)
-subset %>%
-  filter(Timestamp != c(1:30)) %>%
-  ggplot( aes(x=Timestamp, y=Hits, group=factor(file_path), color=factor(file_path))) +
-    geom_line() +
-    #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
-    ggtitle("Total hits over time") +
-    theme_ipsum() +
-    ylab("Hits") 
-    #geom_smooth(aes(method = "lm", se = FALSE)
-
-pupiltest$Timestamp = ave(pupiltest$diameter, pupiltest$file_path, FUN = seq_along)
-pupiltest %>% 
-  ggplot( aes(x=Timestamp, y=diameter, group=factor(file_path), color=factor(file_path))) +
-    #geom_line() +
-    #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
-    ggtitle("pupil size") +
-    theme_ipsum() +
-    ylab("Diameter") +
-    geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
+# subset <- r_sample_Window
+# subset <- subset %>% filter(Timestamp > 30)
+# subset %>%
+#   ggplot( aes(x=Timestamp, y=headdist, group=factor(file_path), color=factor(file_path))) +
+#     geom_line() +
+#     scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
+#     ggtitle("Total head movement over time") +
+#     theme_ipsum() +
+#     ylab("Head movement")# + geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
+# 
+# r_sample_Window %>%
+#   ggplot( aes(x=Timestamp, y=righthanddist, group=factor(file_path), color=factor(file_path))) +
+#    geom_line() +
+#    scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
+#     ggtitle("Total right hand movement over time") +
+#     theme_ipsum() +
+#     ylab("Hand movement") +
+#     geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
+# 
+# r_sample_Window %>%
+#   ggplot( aes(x=Timestamp, y=lefthanddist, group=factor(file_path), color=factor(file_path))) +
+#     geom_line() +
+#     #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
+#     ggtitle("Total left hand movement over time") +
+#     theme_ipsum() +
+#     ylab("Hand movement") +
+#     geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
+# 
+# subset <- r_sample_Window
+# subset <- subset %>% filter(Timestamp > 30)
+# subset %>%
+#   ggplot( aes(x=Timestamp, y=eyedist, group=factor(file_path), color=factor(file_path))) +
+#     geom_line() +
+#     scale_fill_discrete(labels = c(c(unique(subset$file_path)))) + 
+#     ggtitle("Total eye movement over time") +
+#     theme_ipsum() +
+#     ylab("Eye movement") 
+#     #geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
+# 
+# subset <- r_event_Window
+# subset <- subset %>% filter(Timestamp > 60)
+# subset %>%
+#   filter(Timestamp != c(1:30)) %>%
+#   ggplot( aes(x=Timestamp, y=Hits, group=factor(file_path), color=factor(file_path))) +
+#     geom_line() +
+#     #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
+#     ggtitle("Total hits over time") +
+#     theme_ipsum() +
+#     ylab("Hits") 
+#     #geom_smooth(aes(method = "lm", se = FALSE)
+# 
+# pupiltest$Timestamp = ave(pupiltest$diameter, pupiltest$file_path, FUN = seq_along)
+# pupiltest %>% 
+#   ggplot( aes(x=Timestamp, y=diameter, group=factor(file_path), color=factor(file_path))) +
+#     #geom_line() +
+#     #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
+#     ggtitle("pupil size") +
+#     theme_ipsum() +
+#     ylab("Diameter") +
+#     geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
 ```
 
 ```{r Overview, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -492,8 +593,10 @@ sample_Summary %>%
 # https://statisticsglobe.com/r-dplyr-join-inner-left-right-full-semi-anti
 AggDF <- left_join(r_physio_Window, r_sample_Window, by = c("file_path", "Timestamp"))
 AggDF <- left_join(AggDF, r_event_Window, by = c("file_path", "Timestamp"))
-AggDF <- AggDF %>% dplyr::select(-minute, -second) %>% na.omit()
+#AggDF <- AggDF %>% dplyr::select(-minute, -second) %>% na.omit()
 AggDF <- AggDF %>%na.omit()
+
+AggDF$file_path <- as.numeric(AggDF$file_path) 
 
 AggDFeven <- AggDF %>% filter(file_path %% 2 == 0)
 AggDFeven$condition <- "VE"
@@ -508,7 +611,7 @@ pupiltest$file_path <- as.numeric(pupiltest$file_path )
 gamedf <- left_join(gamedf, pupiltest, by = c("file_path", "Timestamp"))
 gamedf$righthanddist[gamedf$file_path == 14] <- gamedf$lefthanddist[gamedf$file_path == 14]
 
-gamedf <- gamedf %>% dplyr::select(-diameter_3d, -pupil_timestamp, -lefthanddist)
+gamedf <- gamedf %>% dplyr::select(-pupil_timestamp, -headdist_min, -contains("lefthand"), -contains("FakeMole"), -contains("minute"), -contains("second"), -file_path_mean, -minute_mean, -second_mean, -contains("Fake_Mole"), -file_path_sum, -contains("nni"), -total_power, -vlf)
 
 
 write.csv(gamedf, "processed_data.csv", row.names = F)
