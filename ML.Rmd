@@ -51,8 +51,8 @@ import sklearn.decomposition as decomp
 import biosppy
 import matplotlib
 import nolds
-import pypi
 import hrvanalysis as hrv
+import csv
 ```
 
 ```{r load in data, include=FALSE}
@@ -89,15 +89,27 @@ normalised_data <- py$normalised
 
 raw_data_VE <- raw_data %>% filter(condition == "VE")
 raw_data_NOVE <- raw_data %>% filter(condition == "No VE")
-raw_data_nohrv <- raw_data[, 19:ncol(raw_data)]
+raw_data_nohrv <- raw_data[, 13:ncol(raw_data)]
 
-scaled_data_nohrv <- scaled_data[, 19:ncol(scaled_data)] 
+scaled_data_nohrv <- scaled_data[, 13:ncol(scaled_data)] 
 scaled_data_VE <- data.frame(scaled_data) %>% dplyr::filter(condition == "VE") 
 scaled_data_NOVE <- data.frame(scaled_data) %>%  dplyr::filter(condition == "No VE")
+scaled_data_VENOHRV <- scaled_data_VE[, 13:ncol(scaled_data_VE)]
+scaled_data_NOVENOHRV <- scaled_data_NOVE[, 13:ncol(scaled_data_NOVE)]
+scaled_phys  <- scaled_data[, 1:12]
+scaled_phys$file_path <- scaled_data$file_path
+scaled_phys$Timestamp <- scaled_data$Timestamp
+scaled_phys$condition <- scaled_data$condition
 
-normalised_data_nohrv <- normalised_data[, 19:ncol(normalised_data)] 
+normalised_data_nohrv <- normalised_data[, 13:ncol(normalised_data)] 
 normalised_data_VE <- data.frame(normalised_data) %>%  dplyr::filter(condition == "VE") 
 normalised_data_NOVE <- data.frame(normalised_data) %>%  dplyr::filter(condition == "No VE")
+normalised_data_VENOHRV <- normalised_data_VE[, 13:ncol(normalised_data_VE)]
+normalised_data_NOVENOHRV <- normalised_data_NOVE[, 13:ncol(normalised_data_NOVE)]
+normalised_phys  <- normalised_data[, 1:12]
+normalised_phys$file_path <- normalised_data$file_path
+normalised_phys$Timestamp <- normalised_data$Timestamp
+normalised_phys$condition <- normalised_data$condition
 ```
 
 ```{python PCA on RAW data}
@@ -117,6 +129,8 @@ def pcaanlysis(df):
   pca = decomp.PCA(n_components = 0.99)
   df_pca = pca.fit(df)
   
+  test = pd.DataFrame(pca.components_, columns = df.columns)
+  
   n_pcs= pca.n_components_
   most_important = [np.abs(pca.components_[i]).argmax() for i in range(n_pcs)]
   initial_feature_names = df.columns
@@ -130,124 +144,89 @@ def pcaanlysis(df):
 
 py_scaled = pd.DataFrame(r.scaled_data)
 print(pcaanlysis(py_scaled))
+#################################################################
 py_scaled_nohrv = pd.DataFrame(r.scaled_data_nohrv)
 print(pcaanlysis(py_scaled_nohrv))
+#################################################################
+py_scaled_data_VE = pd.DataFrame(r.scaled_data_VE)
+print(pcaanlysis(py_scaled_data_VE))
+#################################################################
+py_scaled_data_NOVE = pd.DataFrame(r.normalised_data_NOVE)
+print(pcaanlysis(py_scaled_data_NOVE))
+#################################################################
+py_scaled_data_VENOHRV = pd.DataFrame(r.scaled_data_VENOHRV)
+print(pcaanlysis(py_scaled_data_VENOHRV))
+#################################################################
+py_scaled_data_NOVENOHRV = pd.DataFrame(r.scaled_data_NOVENOHRV)
+print(pcaanlysis(py_scaled_data_NOVENOHRV))
+#################################################################
+py_scaled_phys = pd.DataFrame(r.scaled_phys)
+print(pcaanlysis(py_scaled_phys))
+#################################################################
 
 py_norm = pd.DataFrame(r.normalised_data)
 print(pcaanlysis(py_norm))
+#################################################################
 py_norm_nohrv = pd.DataFrame(r.normalised_data_nohrv)
-test = pd.DataFrame(pcaanlysis(py_norm_nohrv))
-test.style
-```
+print(pcaanlysis(py_norm_nohrv))
+#################################################################
+py_normal_data_VE = pd.DataFrame(r.normalised_data_VE)
+print(pcaanlysis(py_normal_data_VE))
+#################################################################
+py_normal_data_NOVE = pd.DataFrame(r.normalised_data_NOVE)
+print(pcaanlysis(py_normal_data_NOVE))
+#################################################################
+py_normalised_data_VENOHRV = pd.DataFrame(r.normalised_data_VENOHRV)
+print(pcaanlysis(py_normalised_data_VENOHRV))
+#################################################################
+py_normalised_data_NOVENOHRV = pd.DataFrame(r.normalised_data_NOVENOHRV)
+print(pcaanlysis(py_normalised_data_NOVENOHRV))
+#################################################################
+py_normalised_phys = pd.DataFrame(r.normalised_phys)
+print(pcaanlysis(py_normalised_phys))
+#################################################################
 
-```{python PCA on scaled data without physio measures}
-py_scaled_nophys = pd.DataFrame(r.scaled_data_nohrv)
 
-py_scaled_nophys = py_scaled_nophys.set_index("Timestamp")
-py_scaled_nophys = py_scaled_nophys.drop(["file_path", "condition"], axis=1)
+for s in range(1, 21):
+  isolated = py_scaled[py_scaled["file_path"] == s]
+  print(s)
+  print(pcaanlysis(isolated))
+  print("###################################################")
+  
 
-pca = decomp.PCA()
-py_scaled_nophys_PCA = pca.fit(py_scaled_nophys)
+for s in range(1, 21):
+  isolated = py_scaled_nohrv[py_scaled_nohrv["file_path"] == s]
+  print(s)
+  print(pcaanlysis(isolated))
+  print("###################################################")
+  
+  
+for s in range(1, 21):
+  isolated = py_scaled_phys[py_scaled_phys["file_path"] == s]
+  print(s)
+  print(pcaanlysis(isolated))
+  print("###################################################")
+  
+  
+for s in range(1, 21):
+  isolated = py_norm[py_norm["file_path"] == s]
+  print(s)
+  print(pcaanlysis(isolated))
+  print("###################################################")
+  
 
-plt.clf()
-plt.plot(np.cumsum(pca.explained_variance_ratio_))
-plt.xlabel('number of components')
-plt.ylabel('cumulative explained variance');
-plt.show()
+for s in range(1, 21):
+  isolated = py_norm_nohrv[py_norm_nohrv["file_path"] == s]
+  print(s)
+  print(pcaanlysis(isolated))
+  print("###################################################")
+  
+
+for s in range(1, 21):
+  isolated = py_normalised_phys[py_normalised_phys["file_path"] == s]
+  print(s)
+  print(pcaanlysis(isolated))
+  print("###################################################")
 
 
-num_components = 8
-pca = decomp.PCA(num_components)
-py_scaled_nophys_PCA = pca.fit_transform(py_scaled_nophys)
-
-my_physfree_pca = pd.DataFrame(pca.components_, columns =py_scaled_nophys.columns)
-
-n_pcs = pca.n_components_
-imp = [np.abs(pca.components_[i]).argmax() for i in range(n_pcs)]
-
-initial_feature_names = py_scaled_nophys.columns
-
-most_important_names = [initial_feature_names[imp[i]] for i in range(n_pcs)]
-
-most_important_names
-```
-
-```{python PCA on raw data seperated by condition}
-py_raw_ve = pd.DataFrame(r.raw_data_VE)
-py_raw_ve = py_raw_ve.set_index("Timestamp")
-py_raw_ve = py_raw_ve.drop(["file_path", "condition"], axis=1)
-pca = decomp.PCA()
-py_raw_ve_PCA = pca.fit(py_raw_ve)
-plt.clf()
-plt.plot(np.cumsum(pca.explained_variance_ratio_))
-plt.xlabel('number of components')
-plt.ylabel('cumulative explained variance');
-plt.show()
-num_components = 4
-pca = decomp.PCA(num_components)
-py_raw_ve_PCA = pca.fit_transform(py_raw_ve)
-n_pcs = pca.n_components_
-imp = [np.abs(pca.components_[i]).argmax() for i in range(n_pcs)]
-initial_feature_names = py_raw_ve.columns
-most_important_names = [initial_feature_names[imp[i]] for i in range(n_pcs)]
-most_important_names
-
-py_raw_nove = pd.DataFrame(r.raw_data_NOVE)
-py_raw_nove = py_raw_nove.set_index("Timestamp")
-py_raw_nove = py_raw_nove.drop(["file_path", "condition"], axis=1)
-pca = decomp.PCA()
-py_raw_nove_PCA = pca.fit(py_raw_ve)
-plt.clf()
-plt.plot(np.cumsum(pca.explained_variance_ratio_))
-plt.xlabel('number of components')
-plt.ylabel('cumulative explained variance');
-plt.show()
-num_components = 4
-pca = decomp.PCA(num_components)
-py_raw_nove_PCA = pca.fit_transform(py_raw_nove)
-n_pcs = pca.n_components_
-imp = [np.abs(pca.components_[i]).argmax() for i in range(n_pcs)]
-initial_feature_names = py_raw_nove.columns
-most_important_names = [initial_feature_names[imp[i]] for i in range(n_pcs)]
-most_important_names
-```
-
-```{python PCA on scaled data seperated by condition}
-py_raw_ve = pd.DataFrame(r.scaled_data_VE)
-py_raw_ve = py_raw_ve.set_index("Timestamp")
-py_raw_ve = py_raw_ve.drop(["file_path", "condition"], axis=1)
-pca = decomp.PCA()
-py_raw_ve_PCA = pca.fit(py_raw_ve)
-plt.clf()
-plt.plot(np.cumsum(pca.explained_variance_ratio_))
-plt.xlabel('number of components')
-plt.ylabel('cumulative explained variance');
-plt.show()
-num_components = 20
-pca = decomp.PCA(num_components)
-py_raw_ve_PCA = pca.fit_transform(py_raw_ve)
-n_pcs = pca.n_components_
-imp = [np.abs(pca.components_[i]).argmax() for i in range(n_pcs)]
-initial_feature_names = py_raw_ve.columns
-most_important_names = [initial_feature_names[imp[i]] for i in range(n_pcs)]
-most_important_names
-
-py_raw_nove = pd.DataFrame(r.scaled_data_NOVE)
-py_raw_nove = py_raw_nove.set_index("Timestamp")
-py_raw_nove = py_raw_nove.drop(["file_path", "condition"], axis=1)
-pca = decomp.PCA()
-py_raw_nove_PCA = pca.fit(py_raw_ve)
-plt.clf()
-plt.plot(np.cumsum(pca.explained_variance_ratio_))
-plt.xlabel('number of components')
-plt.ylabel('cumulative explained variance');
-plt.show()
-num_components = 20
-pca = decomp.PCA(num_components)
-py_raw_nove_PCA = pca.fit_transform(py_raw_nove)
-n_pcs = pca.n_components_
-imp = [np.abs(pca.components_[i]).argmax() for i in range(n_pcs)]
-initial_feature_names = py_raw_nove.columns
-most_important_names = [initial_feature_names[imp[i]] for i in range(n_pcs)]
-most_important_names
 ```
