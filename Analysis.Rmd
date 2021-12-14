@@ -56,12 +56,19 @@ import sklearn
 import biosppy
 import matplotlib
 import nolds
-import pypi
 import hrvanalysis as hrv
 ```
 
 ```{r logData, echo=FALSE,message=F, warning=F,results='hide', include=F}
 df_questionnaire <- read.table("Questionnaire_data.csv", header=TRUE, fill = FALSE, sep=",")
+
+p21 <- read.table("Neglect_MED7exp_P21_Physio.csv", header=TRUE, fill = FALSE, sep=",")
+names(p21)[names(p21) == "ï..TimeStamp"] <- "Timestamp"  
+test <- p21$Timestamp
+test <- as_datetime(test, format="%m/%d/%Y %H:%M:%S")
+p21$Timestamp <- test
+p21$file_path = "21"
+p21 <- p21 %>% dplyr::select(file_path, Timestamp, Email, Comment, PID, Millis, EDA, IBI, RawPulse, Pressure, Button)
 
 df_physiological <- list.files(path = "./MED7 Eval data Physiological", full.names = T) %>%
 
@@ -69,6 +76,9 @@ map_dfr(read_csv, .id = "file_path") %>%
 group_by(file_path) %>%
 dplyr::mutate(ParticipantID = group_indices())
 names(df_physiological)[names(df_physiological) == "TimeStamp"] <- "Timestamp"  
+
+df_physiological <- rbind(df_physiological, p21)
+
 df_physiological <- df_physiological %>% mutate(
                     minute = minute(Timestamp),
                     second = second(Timestamp))
@@ -117,7 +127,7 @@ sample_Summary <- df_sample %>% dplyr::group_by(file_path)
 
 event_Summary <- df_event %>% dplyr::group_by(file_path) %>% dplyr::select(-TestId, -PlayedPattern)
 
-rm(df_questionnaire, df_physiological, df_sample, df_event, df_pupil)
+rm(df_questionnaire, df_physiological, df_sample, df_event, df_pupil, test, p21)
 #dfSummary <-  dfSummary %>% merge(dsSummary, by = "Participant", all = T)
 ```
 
@@ -450,7 +460,7 @@ def calc_time(window, name):
 
 
 test2 = pd.DataFrame(data = None, columns=py_physio_Data.columns)
-for s in range(1, 21):
+for s in range(1, 22):
   test = py_physio_Data[py_physio_Data["file_path"] == s]
   for i in namearray:
       test[i] = test["IBI"].rolling("30s", min_periods = 30).apply(func = calc_time, kwargs={'name':i})
@@ -474,7 +484,7 @@ def calc_freq(window, name):
 
 
 test2 = pd.DataFrame(data = None, columns=py_physio_Data.columns)
-for s in range(1, 21):
+for s in range(1, 22):
   test = py_physio_Data[py_physio_Data["file_path"] == s]
   for i in namearray:
       test[i] = test["IBI"].rolling("30s", min_periods = 30).apply(func = calc_freq, kwargs={'name':i})

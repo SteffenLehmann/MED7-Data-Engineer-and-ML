@@ -33,14 +33,10 @@ library(data.table)
 library(viridis)
 library(hrbrthemes)
 library(psycho)
-library("devtools")
-install_github("tmalsburg/saccades/saccades", dependencies=TRUE, force=TRUE)
-library(saccades)
 ```
 
 ```{python Loading packages, include=FALSE}
 import numpy as np
-import pandas as pd
 import pandas as pd
 pd.options.mode.chained_assignment = None 
 import matplotlib.pyplot as plt
@@ -52,7 +48,11 @@ import biosppy
 import matplotlib
 import nolds
 import hrvanalysis as hrv
-import csv
+
+import lazypredict
+from sklearn.model_selection import train_test_split
+from lazypredict.Supervised import LazyRegressor
+
 ```
 
 ```{r load in data, include=FALSE}
@@ -112,13 +112,10 @@ normalised_phys$Timestamp <- normalised_data$Timestamp
 normalised_phys$condition <- normalised_data$condition
 ```
 
-```{python PCA on RAW data}
+```{python PCA}
 def pcaanlysis(df):
   df = df.set_index("Timestamp")
   df = df.drop(["file_path", "condition"], axis=1)
-  
-  pca = decomp.PCA()
-  df_pca = pca.fit(df)
   
   #plt.clf()
   #plot = plt.plot(np.cumsum(pca.explained_variance_ratio_))
@@ -143,24 +140,31 @@ def pcaanlysis(df):
 
 
 py_scaled = pd.DataFrame(r.scaled_data)
+py_scaled.name = "py_scaled"
 print(pcaanlysis(py_scaled))
 #################################################################
 py_scaled_nohrv = pd.DataFrame(r.scaled_data_nohrv)
+py_scaled_nohrv.name = "py_scaled_nohrv"
 print(pcaanlysis(py_scaled_nohrv))
 #################################################################
 py_scaled_data_VE = pd.DataFrame(r.scaled_data_VE)
+py_scaled_data_VE.name = "py_scaled_data_VE"
 print(pcaanlysis(py_scaled_data_VE))
 #################################################################
 py_scaled_data_NOVE = pd.DataFrame(r.normalised_data_NOVE)
+py_scaled_data_NOVE.name = "py_scaled_data_NOVE"
 print(pcaanlysis(py_scaled_data_NOVE))
 #################################################################
 py_scaled_data_VENOHRV = pd.DataFrame(r.scaled_data_VENOHRV)
+py_scaled_data_VENOHRV.name = "py_scaled_data_VENOHRV"
 print(pcaanlysis(py_scaled_data_VENOHRV))
 #################################################################
 py_scaled_data_NOVENOHRV = pd.DataFrame(r.scaled_data_NOVENOHRV)
+py_scaled_data_NOVENOHRV.name = "py_scaled_data_NOVENOHRV"
 print(pcaanlysis(py_scaled_data_NOVENOHRV))
 #################################################################
 py_scaled_phys = pd.DataFrame(r.scaled_phys)
+py_scaled_phys.name = "py_scaled_phys"
 print(pcaanlysis(py_scaled_phys))
 #################################################################
 
@@ -187,46 +191,70 @@ print(pcaanlysis(py_normalised_phys))
 #################################################################
 
 
-for s in range(1, 21):
+for s in range(1, 22):
   isolated = py_scaled[py_scaled["file_path"] == s]
+  print(isolated)
   print(s)
   print(pcaanlysis(isolated))
   print("###################################################")
   
 
-for s in range(1, 21):
+for s in range(1, 22):
   isolated = py_scaled_nohrv[py_scaled_nohrv["file_path"] == s]
+  print(isolated)
   print(s)
   print(pcaanlysis(isolated))
   print("###################################################")
   
   
-for s in range(1, 21):
+for s in range(1, 22):
   isolated = py_scaled_phys[py_scaled_phys["file_path"] == s]
   print(s)
   print(pcaanlysis(isolated))
   print("###################################################")
   
   
-for s in range(1, 21):
+for s in range(1, 22):
   isolated = py_norm[py_norm["file_path"] == s]
   print(s)
   print(pcaanlysis(isolated))
   print("###################################################")
   
 
-for s in range(1, 21):
+for s in range(1, 22):
   isolated = py_norm_nohrv[py_norm_nohrv["file_path"] == s]
   print(s)
   print(pcaanlysis(isolated))
   print("###################################################")
   
 
-for s in range(1, 21):
+for s in range(1, 22):
   isolated = py_normalised_phys[py_normalised_phys["file_path"] == s]
   print(s)
   print(pcaanlysis(isolated))
   print("###################################################")
 
+
+```
+
+
+```{python regression}
+def regress(df_data, df_physio, xname, yname):
+  x = df_data.drop(["file_path", "condition", "Timestamp"], axis=1)
+  y = df_physio[yname]
+  
+  X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=.2, random_state=42)
+  reg = LazyRegressor(predictions=True)
+  models, predictions = reg.fit(X_train, X_test, y_train, y_test)
+  
+  models.to_csv(xname + "_" + yname + ".csv")
+  
+  return models
+
+namearray = ["max_hr", "min_hr", "rmssd", "sdnn", "lf", "hf", "lf_hf_ratio", "lfnu", "hfnu", "EDA", "SmoothedEDA"]
+for i in namearray:
+  regress(py_scaled_nohrv, py_scaled_phys, py_scaled_nohrv.name, i)
+  print(i)
+  
 
 ```
