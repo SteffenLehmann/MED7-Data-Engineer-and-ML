@@ -634,19 +634,6 @@ highlyCor <- colnames(gamedf)[findCorrelation(corMatMy, cutoff = 0.9, verbose = 
 gamedf_corr <- gamedf[, which(!colnames(gamedf) %in% highlyCor)]
 ```
 
-```{r Aggregation of DF's, echo=FALSE,message=F, warning=F,results='hide', include=F}
-# https://statisticsglobe.com/merge-data-frames-by-two-id-columns-in-r 
-class(event_Summary)
-class(sample_Summary)
-class(physio_DF)
-
-event_data$second <- floor(event_data$second)
-physio_DF$second <- floor(physio_DF$second)
-
-# https://statisticsglobe.com/r-dplyr-join-inner-left-right-full-semi-anti
-AggDF <- left_join(event_data, physio_DF, by = c("file_path","minute", "second"))
-```
-
 ```{r Parition data, include=FALSE}
 VE_label <- "Y"
 noVE_label <- "N"
