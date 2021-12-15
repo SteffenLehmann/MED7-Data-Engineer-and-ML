@@ -1,0 +1,85 @@
+---
+title: "exp. analysis"
+author: "HZ"
+date: "08/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen=999)
+library(ggplot2)
+library(tidyverse)
+library(tidymodels)
+library(skimr)
+library(stringr)
+library(corrplot)
+library(RColorBrewer)
+library("PerformanceAnalytics")
+library("Hmisc")
+library(Rmisc)
+library(lubridate)
+library(ggbeeswarm)
+library(GGally)
+library(effsize)
+library(magrittr)
+library(dplyr)
+library(reticulate)
+library(TTR)
+library(corrplot)
+library(Hmisc)
+library(caret)
+library(data.table)
+library(viridis)
+library(hrbrthemes)
+library(psycho)
+```
+
+```{python Loading packages, include=FALSE}
+import numpy as np
+import pandas as pd
+pd.options.mode.chained_assignment = None 
+import matplotlib.pyplot as plt
+from scipy import stats as sc
+import sklearn as sk
+import sklearn.preprocessing as pr
+import sklearn.decomposition as decomp
+import biosppy
+import matplotlib
+import nolds
+import hrvanalysis as hrv
+
+import lazypredict
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import ExtraTreesRegressor
+from lazypredict.Supervised import LazyRegressor
+
+```
+
+```{r load in data, include=FALSE}
+data <- read.csv("processed_data.csv")
+```
+
+```{r aggregate first and last minute of data, include=FALSE}
+heads <- data  %>% group_by(file_path) %>% slice_head(n = 60)
+heads_agg <- heads %>% group_by(file_path) %>% summarise_at(vars(-condition, -Timestamp), funs(mean(., na.rm=TRUE)))
+heads_agg$minute <- 1
+
+tails <- data  %>% group_by(file_path) %>% slice_tail(n = 60)
+tails_agg <- tails %>% group_by(file_path) %>% summarise_at(vars(-condition, -Timestamp), funs(mean(., na.rm=TRUE)))
+tails_agg$minute <- 10
+
+lmm_data <- rbind(heads_agg, tails_agg)
+
+lmm_data$condition[(lmm_data$file_path %% 2) == 0] <- "VE"
+lmm_data$condition[(lmm_data$file_path %% 2) != 0] <- "NO VE"
+
+summary(lm(condition~sdnn*minute, data = lmm_data))
+
+ggplot(lmm_data, aes(x=condition, y=EDA)) + geom_point() + geom_smooth(method = "lm")
+```
+
+
+
+
+
