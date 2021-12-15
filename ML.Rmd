@@ -51,6 +51,7 @@ import hrvanalysis as hrv
 
 import lazypredict
 from sklearn.model_selection import train_test_split
+from sklearn.ensemble import ExtraTreesRegressor
 from lazypredict.Supervised import LazyRegressor
 
 ```
@@ -105,6 +106,17 @@ normalised_data_nohrv <- normalised_data[, 13:ncol(normalised_data)]
 normalised_data_VE <- data.frame(normalised_data) %>%  dplyr::filter(condition == "VE") 
 normalised_data_NOVE <- data.frame(normalised_data) %>%  dplyr::filter(condition == "No VE")
 normalised_data_VENOHRV <- normalised_data_VE[, 13:ncol(normalised_data_VE)]
+
+normalised_data_VEphys <- normalised_data_VE[, 1:12]
+normalised_data_VEphys$file_path <- normalised_data_VE$file_path
+normalised_data_VEphys$Timestamp <- normalised_data_VE$Timestamp
+normalised_data_VEphys$condition <- normalised_data_VE$condition
+
+normalised_data_NOVEphys <- normalised_data_NOVE[, 1:12]
+normalised_data_NOVEphys$file_path <- normalised_data_NOVE$file_path
+normalised_data_NOVEphys$Timestamp <- normalised_data_NOVE$Timestamp
+normalised_data_NOVEphys$condition <- normalised_data_NOVE$condition
+
 normalised_data_NOVENOHRV <- normalised_data_NOVE[, 13:ncol(normalised_data_NOVE)]
 normalised_phys  <- normalised_data[, 1:12]
 normalised_phys$file_path <- normalised_data$file_path
@@ -169,26 +181,38 @@ print(pcaanlysis(py_scaled_phys))
 #################################################################
 
 py_norm = pd.DataFrame(r.normalised_data)
+py_norm.name = "py_norm"
 print(pcaanlysis(py_norm))
 #################################################################
 py_norm_nohrv = pd.DataFrame(r.normalised_data_nohrv)
+py_norm_nohrv.name = "py_norm_nohrv"
 print(pcaanlysis(py_norm_nohrv))
 #################################################################
 py_normal_data_VE = pd.DataFrame(r.normalised_data_VE)
+py_normal_data_VE.name = "py_normal_data_VE"
 print(pcaanlysis(py_normal_data_VE))
 #################################################################
 py_normal_data_NOVE = pd.DataFrame(r.normalised_data_NOVE)
+py_normal_data_NOVE.name = "py_normal_data_NOVE"
 print(pcaanlysis(py_normal_data_NOVE))
 #################################################################
 py_normalised_data_VENOHRV = pd.DataFrame(r.normalised_data_VENOHRV)
+py_normalised_data_VENOHRV.name = "py_normalised_data_VENOHRV"
 print(pcaanlysis(py_normalised_data_VENOHRV))
 #################################################################
 py_normalised_data_NOVENOHRV = pd.DataFrame(r.normalised_data_NOVENOHRV)
+py_normalised_data_NOVENOHRV.name = "py_normalised_data_NOVENOHRV"
 print(pcaanlysis(py_normalised_data_NOVENOHRV))
 #################################################################
 py_normalised_phys = pd.DataFrame(r.normalised_phys)
+py_normalised_phys.name = "py_normalised_phys"
 print(pcaanlysis(py_normalised_phys))
 #################################################################
+py_normalised_data_VEphys = pd.DataFrame(r.normalised_data_VEphys)
+py_normalised_data_VEphys.name = "py_normalised_data_VEphys"
+#################################################################
+py_normalised_data_NOVEphys = pd.DataFrame(r.normalised_data_NOVEphys)
+py_normalised_data_NOVEphys.name = "py_normalised_data_NOVEphys"
 
 
 for s in range(1, 22):
@@ -251,10 +275,68 @@ def regress(df_data, df_physio, xname, yname):
   
   return models
 
-namearray = ["max_hr", "min_hr", "rmssd", "sdnn", "lf", "hf", "lf_hf_ratio", "lfnu", "hfnu", "EDA", "SmoothedEDA"]
+namearray = ["IBI", "max_hr", "min_hr", "rmssd", "sdnn", "lf", "hf", "lf_hf_ratio", "lfnu", "hfnu", "EDA", "SmoothedEDA"]
+
 for i in namearray:
   regress(py_scaled_nohrv, py_scaled_phys, py_scaled_nohrv.name, i)
   print(i)
   
+  
+for i in namearray:
+  regress(py_norm_nohrv, py_normalised_phys, py_norm_nohrv.name, i)
+  print(i)
+  
+  
+for i in namearray:
+  regress(py_normalised_data_VENOHRV, py_normalised_data_VEphys, py_normalised_data_VENOHRV.name, i)
+  print(i)
+  
+  
+for i in namearray:
+  regress(py_normalised_data_NOVENOHRV, py_normalised_data_NOVEphys, py_normalised_data_NOVENOHRV.name, i)
+  print(i)
+  
+  
+for s in range(1, 22):
+  isolated_NOHRV = py_norm_nohrv[py_norm_nohrv["file_path"] == s]
+  isolated_NOHRV.name = str(s)
+  isolated_phys = py_normalised_phys[py_normalised_phys["file_path"] == s]
+  for i in namearray:
+    regress(isolated_NOHRV, isolated_phys, isolated_NOHRV.name, i)
+    print("###################################################")
+    
+
+principalcomponents = py_norm_nohrv[["Mole_Expired_sum", "headrot_max", "max_diameter", "SpawnedMole_mean", "Misses_mean", "Hits_sum", "file_path", "condition", "Timestamp"]]
+principalcomponents.name = "principalcomponents"
+for i in namearray:
+  regress(principalcomponents, py_normalised_phys, principalcomponents.name, i)
+  print(i)
+  
+
+```
+
+```{python regression}
+x = py_norm_nohrv.drop(["file_path", "condition", "Timestamp"], axis=1)
+y = py_normalised_phys["EDA"]
+
+X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=.2, random_state=42)
+
+
+tes = ExtraTreesRegressor(n_estimators=100, random_state=0).fit(X_train, y_train)
+tes.score(X_test, y_test)
+
+
+helpme = pd.DataFrame(x.columns)
+helpme["importance"] = tes.feature_importances_
+helpme
+
+
+for s in range(1, 22):
+  isolated_NOHRV = py_norm_nohrv[py_norm_nohrv["file_path"] == s]
+  isolated_NOHRV = isolated_NOHRV.drop(["file_path", "condition", "Timestamp"], axis=1)
+  isolated_phys = py_normalised_phys[py_normalised_phys["file_path"] == s]
+  isolated_phys = isolated_phys["EDA"]
+  tes.score(isolated_NOHRV, isolated_phys)
+
 
 ```
