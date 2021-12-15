@@ -25,41 +25,318 @@ library(effsize)
 library(magrittr)
 library(dplyr)
 library(reticulate)
-library(raster)
-library(sf)
 library(TTR)
-library(RHRV)
 library(corrplot)
 library(Hmisc)
 library(caret)
 library(data.table)
 library(viridis)
 library(hrbrthemes)
-library(eyetrackingR)
+library(psycho)
 ```
 
 ```{python Loading packages, include=FALSE}
 import numpy as np
 import pandas as pd
-import pandas as pd
 pd.options.mode.chained_assignment = None 
 import matplotlib.pyplot as plt
 from scipy import stats as sc
-import sklearn
+import sklearn as sk
+import sklearn.preprocessing as pr
+import sklearn.decomposition as decomp
 import biosppy
 import matplotlib
 import nolds
-import pypi
 import hrvanalysis as hrv
+
+import lazypredict
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import ExtraTreesRegressor
+from lazypredict.Supervised import LazyRegressor
+
 ```
 
 ```{r load in data, include=FALSE}
 data <- read.csv("processed_data.csv")
 ```
 
-```{r load in data, include=FALSE}
+```{python standardization, include=FALSE}
+py_data = r.data
 
+py_data1 = py_data.drop(['file_path', 'Timestamp', 'condition'], axis=1)
+
+scaler = pr.StandardScaler()
+scaled = scaler.fit(py_data1)
+scaled = pd.DataFrame(scaler.transform(py_data1), columns = py_data1.columns)
+
+scaled["file_path"] = py_data["file_path"]
+scaled["Timestamp"] = py_data["Timestamp"]
+scaled["condition"] = py_data["condition"]
+
+
+scaler = pr.MinMaxScaler()
+normalised = scaler.fit(py_data1)
+normalised = pd.DataFrame(scaler.transform(py_data1), columns = py_data1.columns)
+
+normalised["file_path"] = py_data["file_path"]
+normalised["Timestamp"] = py_data["Timestamp"]
+normalised["condition"] = py_data["condition"]
+```
+
+```{r save data into r, include=FALSE}
+raw_data <- py$py_data 
+scaled_data <- py$scaled
+normalised_data <- py$normalised
+
+raw_data_VE <- raw_data %>% filter(condition == "VE")
+raw_data_NOVE <- raw_data %>% filter(condition == "No VE")
+raw_data_nohrv <- raw_data[, 13:ncol(raw_data)]
+
+scaled_data_nohrv <- scaled_data[, 13:ncol(scaled_data)] 
+scaled_data_VE <- data.frame(scaled_data) %>% dplyr::filter(condition == "VE") 
+scaled_data_NOVE <- data.frame(scaled_data) %>%  dplyr::filter(condition == "No VE")
+scaled_data_VENOHRV <- scaled_data_VE[, 13:ncol(scaled_data_VE)]
+scaled_data_NOVENOHRV <- scaled_data_NOVE[, 13:ncol(scaled_data_NOVE)]
+scaled_phys  <- scaled_data[, 1:12]
+scaled_phys$file_path <- scaled_data$file_path
+scaled_phys$Timestamp <- scaled_data$Timestamp
+scaled_phys$condition <- scaled_data$condition
+
+normalised_data_nohrv <- normalised_data[, 13:ncol(normalised_data)] 
+normalised_data_VE <- data.frame(normalised_data) %>%  dplyr::filter(condition == "VE") 
+normalised_data_NOVE <- data.frame(normalised_data) %>%  dplyr::filter(condition == "No VE")
+normalised_data_VENOHRV <- normalised_data_VE[, 13:ncol(normalised_data_VE)]
+
+normalised_data_VEphys <- normalised_data_VE[, 1:12]
+normalised_data_VEphys$file_path <- normalised_data_VE$file_path
+normalised_data_VEphys$Timestamp <- normalised_data_VE$Timestamp
+normalised_data_VEphys$condition <- normalised_data_VE$condition
+
+normalised_data_NOVEphys <- normalised_data_NOVE[, 1:12]
+normalised_data_NOVEphys$file_path <- normalised_data_NOVE$file_path
+normalised_data_NOVEphys$Timestamp <- normalised_data_NOVE$Timestamp
+normalised_data_NOVEphys$condition <- normalised_data_NOVE$condition
+
+normalised_data_NOVENOHRV <- normalised_data_NOVE[, 13:ncol(normalised_data_NOVE)]
+normalised_phys  <- normalised_data[, 1:12]
+normalised_phys$file_path <- normalised_data$file_path
+normalised_phys$Timestamp <- normalised_data$Timestamp
+normalised_phys$condition <- normalised_data$condition
+```
+
+```{python PCA}
+def pcaanlysis(df):
+  df = df.set_index("Timestamp")
+  df = df.drop(["file_path", "condition"], axis=1)
+  
+  #plt.clf()
+  #plot = plt.plot(np.cumsum(pca.explained_variance_ratio_))
+  #plt.xlabel('number of components')
+  #plt.ylabel('cumulative explained variance');
+  #plt.show()
+  
+  pca = decomp.PCA(n_components = 0.99)
+  df_pca = pca.fit(df)
+  
+  test = pd.DataFrame(pca.components_, columns = df.columns)
+  
+  n_pcs= pca.n_components_
+  most_important = [np.abs(pca.components_[i]).argmax() for i in range(n_pcs)]
+  initial_feature_names = df.columns
+  most_important_names = [initial_feature_names[most_important[i]] for i in range(n_pcs)]
+  
+  df_pca = pd.DataFrame(most_important_names)
+  df_pca["variance %"] = pca.explained_variance_ratio_*100
+  
+  return df_pca
+
+
+py_scaled = pd.DataFrame(r.scaled_data)
+py_scaled.name = "py_scaled"
+print(pcaanlysis(py_scaled))
+#################################################################
+py_scaled_nohrv = pd.DataFrame(r.scaled_data_nohrv)
+py_scaled_nohrv.name = "py_scaled_nohrv"
+print(pcaanlysis(py_scaled_nohrv))
+#################################################################
+py_scaled_data_VE = pd.DataFrame(r.scaled_data_VE)
+py_scaled_data_VE.name = "py_scaled_data_VE"
+print(pcaanlysis(py_scaled_data_VE))
+#################################################################
+py_scaled_data_NOVE = pd.DataFrame(r.normalised_data_NOVE)
+py_scaled_data_NOVE.name = "py_scaled_data_NOVE"
+print(pcaanlysis(py_scaled_data_NOVE))
+#################################################################
+py_scaled_data_VENOHRV = pd.DataFrame(r.scaled_data_VENOHRV)
+py_scaled_data_VENOHRV.name = "py_scaled_data_VENOHRV"
+print(pcaanlysis(py_scaled_data_VENOHRV))
+#################################################################
+py_scaled_data_NOVENOHRV = pd.DataFrame(r.scaled_data_NOVENOHRV)
+py_scaled_data_NOVENOHRV.name = "py_scaled_data_NOVENOHRV"
+print(pcaanlysis(py_scaled_data_NOVENOHRV))
+#################################################################
+py_scaled_phys = pd.DataFrame(r.scaled_phys)
+py_scaled_phys.name = "py_scaled_phys"
+print(pcaanlysis(py_scaled_phys))
+#################################################################
+
+py_norm = pd.DataFrame(r.normalised_data)
+py_norm.name = "py_norm"
+print(pcaanlysis(py_norm))
+#################################################################
+py_norm_nohrv = pd.DataFrame(r.normalised_data_nohrv)
+py_norm_nohrv.name = "py_norm_nohrv"
+print(pcaanlysis(py_norm_nohrv))
+#################################################################
+py_normal_data_VE = pd.DataFrame(r.normalised_data_VE)
+py_normal_data_VE.name = "py_normal_data_VE"
+print(pcaanlysis(py_normal_data_VE))
+#################################################################
+py_normal_data_NOVE = pd.DataFrame(r.normalised_data_NOVE)
+py_normal_data_NOVE.name = "py_normal_data_NOVE"
+print(pcaanlysis(py_normal_data_NOVE))
+#################################################################
+py_normalised_data_VENOHRV = pd.DataFrame(r.normalised_data_VENOHRV)
+py_normalised_data_VENOHRV.name = "py_normalised_data_VENOHRV"
+print(pcaanlysis(py_normalised_data_VENOHRV))
+#################################################################
+py_normalised_data_NOVENOHRV = pd.DataFrame(r.normalised_data_NOVENOHRV)
+py_normalised_data_NOVENOHRV.name = "py_normalised_data_NOVENOHRV"
+print(pcaanlysis(py_normalised_data_NOVENOHRV))
+#################################################################
+py_normalised_phys = pd.DataFrame(r.normalised_phys)
+py_normalised_phys.name = "py_normalised_phys"
+print(pcaanlysis(py_normalised_phys))
+#################################################################
+py_normalised_data_VEphys = pd.DataFrame(r.normalised_data_VEphys)
+py_normalised_data_VEphys.name = "py_normalised_data_VEphys"
+#################################################################
+py_normalised_data_NOVEphys = pd.DataFrame(r.normalised_data_NOVEphys)
+py_normalised_data_NOVEphys.name = "py_normalised_data_NOVEphys"
+
+
+for s in range(1, 22):
+  isolated = py_scaled[py_scaled["file_path"] == s]
+  print(isolated)
+  print(s)
+  print(pcaanlysis(isolated))
+  print("###################################################")
+  
+
+for s in range(1, 22):
+  isolated = py_scaled_nohrv[py_scaled_nohrv["file_path"] == s]
+  print(isolated)
+  print(s)
+  print(pcaanlysis(isolated))
+  print("###################################################")
+  
+  
+for s in range(1, 22):
+  isolated = py_scaled_phys[py_scaled_phys["file_path"] == s]
+  print(s)
+  print(pcaanlysis(isolated))
+  print("###################################################")
+  
+  
+for s in range(1, 22):
+  isolated = py_norm[py_norm["file_path"] == s]
+  print(s)
+  print(pcaanlysis(isolated))
+  print("###################################################")
+  
+
+for s in range(1, 22):
+  isolated = py_norm_nohrv[py_norm_nohrv["file_path"] == s]
+  print(s)
+  print(pcaanlysis(isolated))
+  print("###################################################")
+  
+
+for s in range(1, 22):
+  isolated = py_normalised_phys[py_normalised_phys["file_path"] == s]
+  print(s)
+  print(pcaanlysis(isolated))
+  print("###################################################")
 
 
 ```
 
+
+```{python regression}
+def regress(df_data, df_physio, xname, yname):
+  x = df_data.drop(["file_path", "condition", "Timestamp"], axis=1)
+  y = df_physio[yname]
+  
+  X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=.2, random_state=42)
+  reg = LazyRegressor(predictions=True)
+  models, predictions = reg.fit(X_train, X_test, y_train, y_test)
+  
+  models.to_csv(xname + "_" + yname + ".csv")
+  
+  return models
+
+namearray = ["IBI", "max_hr", "min_hr", "rmssd", "sdnn", "lf", "hf", "lf_hf_ratio", "lfnu", "hfnu", "EDA", "SmoothedEDA"]
+
+for i in namearray:
+  regress(py_scaled_nohrv, py_scaled_phys, py_scaled_nohrv.name, i)
+  print(i)
+  
+  
+for i in namearray:
+  regress(py_norm_nohrv, py_normalised_phys, py_norm_nohrv.name, i)
+  print(i)
+  
+  
+for i in namearray:
+  regress(py_normalised_data_VENOHRV, py_normalised_data_VEphys, py_normalised_data_VENOHRV.name, i)
+  print(i)
+  
+  
+for i in namearray:
+  regress(py_normalised_data_NOVENOHRV, py_normalised_data_NOVEphys, py_normalised_data_NOVENOHRV.name, i)
+  print(i)
+  
+  
+for s in range(1, 22):
+  isolated_NOHRV = py_norm_nohrv[py_norm_nohrv["file_path"] == s]
+  isolated_NOHRV.name = str(s)
+  isolated_phys = py_normalised_phys[py_normalised_phys["file_path"] == s]
+  for i in namearray:
+    regress(isolated_NOHRV, isolated_phys, isolated_NOHRV.name, i)
+    print("###################################################")
+    
+
+principalcomponents = py_norm_nohrv[["Mole_Expired_sum", "headrot_max", "max_diameter", "SpawnedMole_mean", "Misses_mean", "Hits_sum", "file_path", "condition", "Timestamp"]]
+principalcomponents.name = "principalcomponents"
+for i in namearray:
+  regress(principalcomponents, py_normalised_phys, principalcomponents.name, i)
+  print(i)
+  
+
+```
+
+```{python regression}
+x = py_norm_nohrv.drop(["file_path", "condition", "Timestamp"], axis=1)
+y = py_normalised_phys["EDA"]
+
+X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=.2, random_state=42)
+
+
+tes = ExtraTreesRegressor(n_estimators=100, random_state=0).fit(X_train, y_train)
+tes.score(X_test, y_test)
+
+
+helpme = pd.DataFrame(x.columns)
+helpme["importance"] = tes.feature_importances_
+helpme
+
+
+for s in range(1, 22):
+  isolated_NOHRV = py_norm_nohrv[py_norm_nohrv["file_path"] == s]
+  isolated_NOHRV = isolated_NOHRV.drop(["file_path", "condition", "Timestamp"], axis=1)
+  isolated_phys = py_normalised_phys[py_normalised_phys["file_path"] == s]
+  isolated_phys = isolated_phys["EDA"]
+  tes.score(isolated_NOHRV, isolated_phys)
+
+
+```
