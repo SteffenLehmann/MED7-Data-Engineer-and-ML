@@ -179,7 +179,7 @@ rm(event_Summary)
 ```
 
 ```{r Pre-processing of physiological logs, echo=FALSE,message=F, warning=F,results='hide', include=F}
-physio_DF <- filter(physiological_Summary, IBI > -1 & IBI > 401 & IBI <= 1500)
+physio_DF <- filter(physiological_Summary, IBI > -1 & IBI > 401 & IBI <= 1200)
 
 physio_DF <- physio_DF %>% group_by(file_path) %>% mutate(SmoothedEDA = runMean(EDA, 5))
 
@@ -189,36 +189,6 @@ physio_DF[physio_DF == 0] <- NA
 physio_DF <- physio_DF %>% dplyr::group_by(file_path) %>% dplyr::select(-minute, -second)#, -Timestamp
 
 rm(physiological_Summary)
-```
-
-```{r Eye tracking loss analysis, echo=FALSE,message=F, warning=F,results='hide', include=F}
-eye_data <- sample_Summary %>% dplyr::group_by(file_path) %>% dplyr::select(GazeConfidence, WorldGazeHitPositionX, WorldGazeHitPositionY, WorldGazeHitPositionZ)
-eye_data[eye_data == "NULL"] <- "0.0000"
-eye_data$Timestamp <- sample_Summary$Timestamp
-eye_data[, 2:5] <- sapply(eye_data[, 2:5], as.double)
-
-eye_data <- eye_data %>%
-  dplyr::mutate(TrackLoss = dplyr::case_when(WorldGazeHitPositionX == 0 ~ TRUE,
-                                             TRUE ~ FALSE))
-
-#eye_data[eye_data == TRUE] <- "TRUE"
-test <- eye_data %>% dplyr::group_by(TrackLoss, file_path) %>% dplyr::summarise(Number=(n())) 
-test2 <- count(eye_data, "file_path")
-test <- test %>% filter(TrackLoss == TRUE)
-test$percentage <- (test$Number / test2$freq) * 100
-
-
-pupil_data <- pupil_summary %>% dplyr::group_by(file_path)
-pupil_data[is.na(pupil_data)] <- 0.0000
-pupil_data <- sapply(pupil_data, as.double)
-pupil_data <- pupil_data %>% dplyr::mutate(TrackLoss1 = dplyr::case_when(diameter == 0 ~ TRUE, TRUE ~ FALSE))
-pupil_data <- pupil_data %>% dplyr::mutate(TrackLoss2 = dplyr::case_when(diameter_3d == 0 ~ TRUE, TRUE ~ FALSE))
-
-test <- pupil_data %>% dplyr::group_by(TrackLoss1, file_path) %>% dplyr::summarise(Number=(n())) 
-test2 <- count(pupil_data, "file_path")
-test <- test %>% filter(TrackLoss1 == TRUE)
-test$percentage <- (test$Number / test2$freq) * 100
-
 ```
 
 ```{r pupil data pre-process, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -339,8 +309,11 @@ headrot.df <- headrot.df %>%
     lead = geometry[(dplyr::row_number()) + 1],
     dist = st_distance(geometry, lead, by_element = T),
   )
-
-sample_Summary$headrot <- headrot.df$dist
+dist <- ifelse((!is.na(headrot.df$dist) & headrot.df$dist > 100), (360 - headrot.df$dist), (headrot.df$dist))
+dist[is.na(dist)] <- 0
+dist <- ifelse((headrot.df$dist < 0 & headrot.df$dist > 100), (0), (headrot.df$dist))
+dist[is.na(dist)] <- 0
+sample_Summary$headrot <- dist
 
 rm(head.df, headrot.df)
 ```
@@ -521,66 +494,9 @@ r_physio_Window$Timestamp = ave(r_physio_Window$EDA, r_physio_Window$file_path, 
 pupiltest$Timestamp = row.names(pupiltest)
 pupiltest$Timestamp = ave(pupiltest$mean_diameter, pupiltest$file_path, FUN = seq_along)
 
-# subset <- r_sample_Window
-# subset <- subset %>% filter(Timestamp > 30)
-# subset %>%
-#   ggplot( aes(x=Timestamp, y=headdist, group=factor(file_path), color=factor(file_path))) +
-#     geom_line() +
-#     scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
-#     ggtitle("Total head movement over time") +
-#     theme_ipsum() +
-#     ylab("Head movement")# + geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
-# 
-# r_sample_Window %>%
-#   ggplot( aes(x=Timestamp, y=righthanddist, group=factor(file_path), color=factor(file_path))) +
-#    geom_line() +
-#    scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
-#     ggtitle("Total right hand movement over time") +
-#     theme_ipsum() +
-#     ylab("Hand movement") +
-#     geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
-# 
-# r_sample_Window %>%
-#   ggplot( aes(x=Timestamp, y=lefthanddist, group=factor(file_path), color=factor(file_path))) +
-#     geom_line() +
-#     #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
-#     ggtitle("Total left hand movement over time") +
-#     theme_ipsum() +
-#     ylab("Hand movement") +
-#     geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
-# 
-# subset <- r_sample_Window
-# subset <- subset %>% filter(Timestamp > 30)
-# subset %>%
-#   ggplot( aes(x=Timestamp, y=eyedist, group=factor(file_path), color=factor(file_path))) +
-#     geom_line() +
-#     scale_fill_discrete(labels = c(c(unique(subset$file_path)))) + 
-#     ggtitle("Total eye movement over time") +
-#     theme_ipsum() +
-#     ylab("Eye movement") 
-#     #geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
-# 
-# subset <- r_event_Window
-# subset <- subset %>% filter(Timestamp > 60)
-# subset %>%
-#   filter(Timestamp != c(1:30)) %>%
-#   ggplot( aes(x=Timestamp, y=Hits, group=factor(file_path), color=factor(file_path))) +
-#     geom_line() +
-#     #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
-#     ggtitle("Total hits over time") +
-#     theme_ipsum() +
-#     ylab("Hits") 
-#     #geom_smooth(aes(method = "lm", se = FALSE)
-# 
-# pupiltest$Timestamp = ave(pupiltest$diameter, pupiltest$file_path, FUN = seq_along)
-# pupiltest %>% 
-#   ggplot( aes(x=Timestamp, y=diameter, group=factor(file_path), color=factor(file_path))) +
-#     #geom_line() +
-#     #scale_fill_discrete(labels = c(c(unique(r_sample_Window$file_path)))) + 
-#     ggtitle("pupil size") +
-#     theme_ipsum() +
-#     ylab("Diameter") +
-#     geom_smooth(aes(group = factor(file_path)), method = "lm", se = FALSE)
+ggplot(r_physio_Window,aes(x=Timestamp,y=hf)) + geom_smooth(method = "lm",level = 0.95) + 
+geom_point() + facet_wrap(~file_path, nrow = 3, ncol = 7)
+
 ```
 
 ```{r Overview, echo=FALSE,message=F, warning=F,results='hide', include=F}
@@ -621,16 +537,17 @@ pupiltest$file_path <- as.numeric(pupiltest$file_path )
 gamedf <- left_join(gamedf, pupiltest, by = c("file_path", "Timestamp"))
 gamedf$righthanddist[gamedf$file_path == 14] <- gamedf$lefthanddist[gamedf$file_path == 14]
 
-gamedf <- gamedf %>% dplyr::select(-pupil_timestamp, -headdist_min, -contains("lefthand"), -contains("FakeMole"), -contains("minute"), -contains("second"), -file_path_mean, -minute_mean, -second_mean, -contains("Fake_Mole"), -file_path_sum, -contains("nni"), -total_power, -vlf)
+gamedf <- gamedf %>% dplyr::select(-pupil_timestamp, -headdist_min, -contains("lefthand"), -contains("FakeMole"), -contains("minute"), -contains("second"), -file_path_mean, -minute_mean, -second_mean, -contains("Fake_Mole"), -file_path_sum, -contains("nni"), -total_power, -vlf, -contains("Red"))
 
 
 write.csv(gamedf, "processed_data.csv", row.names = F)
 ```
 
 ```{r correlation checks, include=FALSE}
-corMatMy <- cor(gamedf[,3:14])
-corrplot(corMatMy, order = "hclust", tl.cex = 0.7)
-highlyCor <- colnames(gamedf)[findCorrelation(corMatMy, cutoff = 0.9, verbose = TRUE)]
+corrstuff <- gamedf %>% dplyr::select(-Timestamp, -condition, -file_path)
+corMatMy <- cor(corrstuff)
+corrplot(corMatMy, order = "hclust", tl.cex = 0.6)
+highlyCor <- colnames(gamedf)[findCorrelation(corMatMy, cutoff = 0.6, verbose = TRUE)]
 gamedf_corr <- gamedf[, which(!colnames(gamedf) %in% highlyCor)]
 ```
 
