@@ -62,6 +62,13 @@ import seaborn as sns
 # seaborn settings
 sns.set_style("whitegrid")
 sns.set_context("talk")
+
+from sklearn.preprocessing import LabelEncoder
+
+# Import necessary modules
+from math import sqrt
+from sklearn.metrics import classification_report,r2_score
+from sklearn.svm import SVC
 ```
 
 ```{r load in data, include=FALSE}
@@ -70,7 +77,6 @@ data <- read.csv("processed_data.csv")
 
 ```{python standardization, include=FALSE}
 py_data = r.data
-
 py_data1 = py_data.drop(['file_path', 'Timestamp', 'condition'], axis=1)
 
 scaler = pr.StandardScaler()
@@ -140,12 +146,6 @@ def pcaanlysis(df):
   df_pca = pca.fit_transform(df)
   test = pd.DataFrame(pca.components_, columns = df.columns)
   n_pcs= pca.n_components_
-  most_important = [np.abs(pca.components_[i]).argmax() for i in range(n_pcs)]
-  initial_feature_names = df.columns
-  most_important_names = [initial_feature_names[most_important[i]] for i in range(n_pcs)]
-  df_pca = pd.DataFrame(pca.components_[i])
-  df_pca["variance %"] = pca.explained_variance_ratio_*100
-  print(df_pca)
   res = pd.DataFrame(pca.components_, columns = df.columns)
   return res
 
@@ -399,7 +399,8 @@ def pcaanlysiswithfig(df):
   print(principalDf)
   plt.clf()
   #df = df[[most_important_names]].columns
-  ax = sns.heatmap(pca.components_,cmap='YlGnBu',yticklabels=[ "PCA"+str(x) for x in range(1,pca.n_components_+1)],xticklabels=list(df.columns), annot=True, annot_kws={"fontsize":14})
+  cmap = sns.diverging_palette(150,150, as_cmap=True, l=85)
+  ax = sns.heatmap(pca.components_,cmap=cmap,yticklabels=[ "PCA"+str(x) for x in range(1,pca.n_components_+1)],xticklabels=list(df.columns), annot=True, annot_kws={"fontsize":14})
   plt.xticks(rotation=45, rotation_mode='anchor', ha='right') 
   ax.figure.savefig('hmx.png', transparent=True, bbox_inches='tight')
   #ax.figure.subplots_adjust(left = 0.3)
@@ -416,4 +417,160 @@ dict = {'righthanddist_mean': 'Mean Hand Movement',
         'max_diameter': 'Maximum Pupil Diameter'}
 test.rename(columns=dict, inplace=True)
 pca_py_scaled_nohrv = pcaanlysiswithfig(test)
+```
+
+```{python Classification2}
+df = py_data[py_data["file_path"] <= 18]
+df2 = py_data[py_data["file_path"] > 18]
+target_column = ['condition']
+df = df.drop(["file_path", "Timestamp"], axis=1)
+predictors = list(set(list(df.columns))-set(target_column))
+df[predictors] = df[predictors]/df[predictors].max()
+X = df[predictors].values
+y = df[target_column].values
+df2 = df2.drop(["file_path", "Timestamp"], axis=1)
+predictors2 = list(set(list(df2.columns))-set(target_column))
+df2[predictors2] = df2[predictors2]/df[predictors2].max()
+X2 = df2[predictors2].values
+y2 = df2[target_column].values
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random_state=40)
+mlp = SVC(gamma='auto', kernel = "linear")
+mlp.fit(X_train,y_train)
+predict_train = mlp.predict(X_train)
+predict_test = mlp.predict(X_test)
+print(confusion_matrix(y_train,predict_train))
+print(classification_report(y_train,predict_train))
+predict_sec = mlp.predict(X2)
+print(confusion_matrix(y2,predict_sec))
+print(classification_report(y2,predict_sec))
+print(pd.DataFrame(mlp.coef_))
+
+df = py_data
+target_column = ['condition']
+df = df.drop(["file_path", "Timestamp"], axis=1)
+predictors = list(set(list(df.columns))-set(target_column))
+df[predictors] = df[predictors]/df[predictors].max()
+X = df[predictors].values
+y = df[target_column].values
+mlp = SVC(gamma='auto', kernel = "linear")
+scores = cross_val_score(mlp, X, y, cv=10)
+print(confusion_matrix(y_train,predict_train))
+print(classification_report(y_train,predict_train))
+print(pd.DataFrame(mlp.coef_))
+```
+
+```{r splitting and agg for svm, include=FALSE}
+tail_raw <- data  %>% group_by(file_path) %>% slice_tail(n = 60)
+tail_raw$condition[(tail_raw$file_path %% 2) == 0] <- "VE"
+tail_raw$condition[(tail_raw$file_path %% 2) != 0] <- "NO VE"
+tail_raw$condition[(tail_raw$file_path == 21)] <- "VE"
+
+tail_raw_pc <- tail_raw %>% select(righthanddist_mean, condition, max_diameter, mean_diameter_3d, headrot_sum,headdist_max, -file_path)
+tail_raw_pc <- tail_raw_pc %>% ungroup()
+tail_raw_pc <- tail_raw_pc %>% select(-file_path)
+
+tail_agg <- tail_raw %>% group_by(file_path) %>% summarise_at(vars(-condition, -Timestamp), funs(mean(., na.rm=TRUE)))
+tail_agg$condition[(tail_agg$file_path %% 2) == 0] <- "VE"
+tail_agg$condition[(tail_agg$file_path %% 2) != 0] <- "NO VE"
+tail_agg$condition[(tail_agg$file_path == 21)] <- "VE"
+
+tail_agg_nophys <- tail_agg %>% dplyr::select(-lf, -hf, -lfnu, -hfnu, -sdnn, -rmssd, -IBI, -EDA, -SmoothedEDA, -min_hr, -max_hr, -lf_hf_ratio)
+tail_agg_nophys$condition = 10
+tail_raw_nophys <- tail_raw %>% dplyr::select(-lf, -hf, -lfnu, -hfnu, -sdnn, -rmssd, -IBI, -EDA, -SmoothedEDA, -min_hr, -max_hr, -lf_hf_ratio)
+
+scaled_phys_tail <- scaled_phys%>% group_by(file_path) %>% slice_tail(n = 60)
+scaled_phys_tail <- scaled_phys_tail %>% filter(file_path != 15, file_path != 16, file_path != 15, file_path != 2)
+scaled_phys_tail<- scaled_phys_tail %>% group_by(file_path) %>% summarise_at(vars(-condition), funs(mean(., na.rm=TRUE)))
+scaled_phys_tail$condition[(scaled_phys_tail$file_path %% 2) == 0] <- "VE"
+scaled_phys_tail$condition[(scaled_phys_tail$file_path %% 2) != 0] <- "NO VE"
+scaled_phys_tail$condition[(scaled_phys_tail$file_path == 21)] <- "VE"
+
+
+
+head_raw <- data  %>% group_by(file_path) %>% slice_head(n = 60)
+head_raw$condition[(head_raw$file_path %% 2) == 0] <- "VE"
+head_raw$condition[(head_raw$file_path %% 2) != 0] <- "NO VE"
+head_raw$condition[(head_raw$file_path == 21)] <- "VE"
+
+head_agg <- head_raw %>% group_by(file_path) %>% summarise_at(vars(-condition, -Timestamp), funs(mean(., na.rm=TRUE)))
+head_agg$condition[(head_agg$file_path %% 2) == 0] <- "VE"
+head_agg$condition[(head_agg$file_path %% 2) != 0] <- "NO VE"
+head_agg$condition[(head_agg$file_path == 21)] <- "VE"
+
+head_agg_nophys <- head_agg %>% dplyr::select(-lf, -hf, -lfnu, -hfnu, -sdnn, -rmssd, -IBI, -EDA, -SmoothedEDA, -min_hr, -max_hr, -lf_hf_ratio)
+head_agg_nophys$condition= 1
+
+scaled_phys_head <- scaled_phys%>% group_by(file_path) %>% slice_head(n = 60)
+scaled_phys_head <- scaled_phys_head %>% filter(file_path != 15, file_path != 16, file_path != 15, file_path != 2)
+scaled_phys_head<- scaled_phys_head %>% group_by(file_path) %>% summarise_at(vars(-condition), funs(mean(., na.rm=TRUE)))
+scaled_phys_head$condition[(scaled_phys_head$file_path %% 2) == 0] <- "VE"
+scaled_phys_head$condition[(scaled_phys_head$file_path %% 2) != 0] <- "NO VE"
+scaled_phys_head$condition[(scaled_phys_head$file_path == 21)] <- "VE"
+
+tracking_con <- rbind(tail_agg_nophys, head_agg_nophys)
+tracking_con$condition <-0
+
+bind_head_phys <- scaled_phys_head
+bind_head_phys$condition <- "1"
+bind_tail_phys <- scaled_phys_tail
+bind_tail_phys$condition <- "10"
+phys_minute = rbind(bind_tail_phys, bind_head_phys)
+
+ve_head_phys <- scaled_phys_head %>% filter(condition == "VE")
+ve_head_phys$condition <- "1"
+ve_tail_phys <- scaled_phys_tail %>% filter(condition == "VE")
+ve_tail_phys$condition <- "10"
+phys_minute_ve <- rbind(ve_head_phys, ve_tail_phys)
+
+nove_head_phys <- scaled_phys_head %>% filter(condition == "NO VE")
+nove_head_phys$condition <- "1"
+nove_tail_phys <- scaled_phys_tail %>% filter(condition == "NO VE")
+nove_tail_phys$condition <- "10"
+phys_minute_nove <- rbind(nove_head_phys, nove_tail_phys)
+
+agg_nophys = rbind(tail_agg_nophys, head_agg_nophys)
+
+
+ve_tail_agg_nophys <- tail_agg %>% dplyr::select(-lf, -hf, -lfnu, -hfnu, -sdnn, -rmssd, -IBI, -EDA, -SmoothedEDA, -min_hr, -max_hr, -lf_hf_ratio)
+ve_tail_agg_nophys <- ve_tail_agg_nophys %>% filter(condition == "VE")
+ve_tail_agg_nophys$condition = 10
+ve_head_agg_nophys <- head_agg %>% dplyr::select(-lf, -hf, -lfnu, -hfnu, -sdnn, -rmssd, -IBI, -EDA, -SmoothedEDA, -min_hr, -max_hr, -lf_hf_ratio)
+ve_head_agg_nophys <- ve_head_agg_nophys %>% filter(condition == "VE")
+ve_head_agg_nophys$condition = 1
+ve_agg_nophys = rbind(ve_head_agg_nophys, ve_tail_agg_nophys)
+
+nove_tail_agg_nophys <- tail_agg %>% dplyr::select(-lf, -hf, -lfnu, -hfnu, -sdnn, -rmssd, -IBI, -EDA, -SmoothedEDA, -min_hr, -max_hr, -lf_hf_ratio)
+nove_tail_agg_nophys <- nove_tail_agg_nophys %>% filter(condition == "NO VE")
+nove_tail_agg_nophys$condition = 10
+nove_head_agg_nophys <- head_agg %>% dplyr::select(-lf, -hf, -lfnu, -hfnu, -sdnn, -rmssd, -IBI, -EDA, -SmoothedEDA, -min_hr, -max_hr, -lf_hf_ratio)
+nove_head_agg_nophys <- nove_tail_agg_nophys %>% filter(condition == "NO VE")
+nove_head_agg_nophys$condition = 1
+nove_agg_nophys = rbind(nove_head_agg_nophys, nove_tail_agg_nophys)
+```
+
+```{python Classification2}
+df = r.ve_agg_nophys
+target_column = ['condition']
+df = df.drop(["file_path"], axis=1)
+predictors = list(set(list(df.columns))-set(target_column))
+df[predictors] = df[predictors]/df[predictors].max()
+X = df[predictors].values
+y = df[target_column].values
+mlp = SVC(gamma='auto', kernel = "linear")
+scores = cross_val_score(mlp, X, y, cv=8)
+scores
+scores.mean()
+scores.std()
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.30, random_state=40)
+mlp = SVC(gamma='auto', kernel = "linear")
+mlp.fit(X_train,y_train)
+predict_train = mlp.predict(X_train)
+predict_test = mlp.predict(X_test)
+
+print(confusion_matrix(y_train,predict_train))
+print(classification_report(y_train,predict_train))
+results = pd.DataFrame(mlp.coef_).T
+results["feat"] = df[predictors].columns
+results
 ```

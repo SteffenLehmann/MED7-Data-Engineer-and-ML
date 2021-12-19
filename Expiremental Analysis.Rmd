@@ -34,6 +34,9 @@ library(viridis)
 library(hrbrthemes)
 library(psycho)
 library("lme4")
+
+library(cowplot)
+
 ```
 
 
@@ -79,7 +82,7 @@ lmm_data$condition[(lmm_data$file_path == 21)] <- "VE"
 
 #lmm_data <- lmm_data %>% filter(file_path != c(15, 16,2))
 
-summary(lm(righthanddist_min~ Timestamp*condition, data = lmm_data))
+summary(lm(righthandmovement_mean~ Timestamp*condition, data = lmm_data))
 
 ggplot(lmm_data, aes(x=condition, y=rmssd)) + geom_point() + geom_smooth(method = "lm")
 
@@ -109,54 +112,45 @@ lmm_data$condition[(lmm_data$file_path %% 2) != 0] <- "NO VE"
 lmm_data$condition[(lmm_data$file_path %% 2) == 0] <- "VE"
 lmm_data$condition[(lmm_data$file_path == 21)] <- "VE"
 
-summary(lm(righthanddist_mean  ~ as.factor(condition)+minute, data = lmm_data))
+summary(lm(MoleActivatedDuration_sum~as.factor(condition)+minute, data = lmm_data))
 
-summary(lm(Hits_sum ~ condition+minute, data = lmm_data))
-
-ggplot(lmm_data,aes(x=minute,y=rmssd)) + geom_smooth(method = "lm",level = 0.95) + 
+ggplot(lmm_data,aes(x=minute,y=min_hr)) + geom_smooth(method = "lm",level = 0.95) + 
 geom_point() + facet_wrap(~file_path, nrow = 3, ncol = 7)
 
 
-ggplot(data,aes(x=Timestamp,y=SpawnedMole_mean )) + geom_smooth(method = "lm",level = 0.95) + 
+ggplot(data,aes(x=Timestamp,y=sdnn )) + geom_smooth(method = "lm",level = 0.95) + 
 geom_point() + facet_wrap(~file_path, nrow = 3, ncol = 7)
 
 ```
 
 
-```{r mixed effects, include=FALSE}
-summary(lmer(SmoothedEDA ~ Timestamp + (Timestamp | condition), data))
-
-sqrt(sum(residuals(lm(SmoothedEDA~Timestamp,data=data))^2)/(dim(data)[1]-2))
-sqrt(sum(resid(lmer(SmoothedEDA~Timestamp+(Timestamp|condition),data))^2)/(dim(data)[1]-2))
-
-fit1 <- lm(SmoothedEDA ~ Timestamp, data = data)
-fit2 <- lmer(SmoothedEDA ~ Timestamp + (Timestamp | condition), data, REML = FALSE)
-anova(fit2, fit1)
+```{r comparing sroke patient, include=FALSE}
+lmm_data %>% filter(file_path != 21) %>% group_by(minute) %>% skim()
+lmm_data %>% filter(file_path == 21) %>% group_by(minute) %>% skim()
 ```
 
-```{r testing stuff, include=FALSE}
-heads <- data  %>% group_by(file_path) %>% slice_head(n = 60)
-tails <- data  %>% group_by(file_path) %>% slice_tail(n = 60)
-lmm_data <- rbind(heads, tails)
+```{r comparing sroke patient, include=FALSE}
+data_filtered <- data %>% filter(file_path != 15, file_path != 16, file_path != 15, file_path != 2)
+data_filtered_tailed <- data_filtered  %>% group_by(file_path)# %>% slice_tail(n = 30)
+data_filtered_tailed$Condition[(data_filtered_tailed$file_path %% 2) != 0] <- "Mute"
+data_filtered_tailed$Condition[(data_filtered_tailed$file_path %% 2) != 0] <- "Mute"
+data_filtered_tailed$Condition[(data_filtered_tailed$file_path %% 2) == 0] <- "Noisy"
+data_filtered_tailed$Condition[(data_filtered_tailed$file_path == 21)] <- "Noisy"
+data_filtered_tailed <- data_filtered_tailed %>% filter(rmssd < 80)
 
-lmm_data <- lmm_data %>% filter(file_path != c(15, 16,2))
+p <- ggplot(data = data_filtered, aes(x = Timestamp, y = mean(rmssd)))+
+    geom_point(aes(color = condition, shape = condition))
 
-lmm_data$condition[(lmm_data$file_path %% 2) == 0] <- "VE"
-lmm_data$condition[(lmm_data$file_path %% 2) != 0] <- "NO VE"
-lmm_data$condition[(lmm_data$file_path == 21)] <- "VE"
-
-summary(lm(rmssd~condition*Timestamp, data = lmm_data))
-
-qqline(lmer(rmssd ~ Timestamp + (Timestamp | condition), data = lmm_data))
-
-ggplot(lmm_data, aes(x=condition, y=rmssd)) + geom_point() + geom_smooth(method = "lm")
+p
 
 
 
+plot <- ggplot(data_filtered_tailed, aes(x=Timestamp, y=rmssd, color = Condition)) + geom_smooth(method="lm") + theme_minimal()+ labs(x = "Time (s)", y = "Heart Rate Variability (rmssd)") + theme(legend.position="none")
+plot2 <- ggplot(data_filtered_tailed, aes(x=Timestamp, y=Hits_mean, color = Condition)) + geom_smooth(method="lm") + theme_minimal()+ labs(x = "Time (s)", y = "Average targets hit")
+plot
 
-ggplot(lmm_data,aes(x=Timestamp,y=rmssd)) + geom_smooth(method = "lm",level = 0.95) + 
-geom_point() + facet_wrap(~file_path, nrow = 3, ncol = 7)
-
+mergedplot <- plot_grid(plot, plot2, labels = "AUTO")
+save_plot("plot.png", mergedplot, ncol = 2)
 ```
 
 
