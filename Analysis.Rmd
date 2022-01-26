@@ -198,8 +198,14 @@ pupil_data <- sapply(pupil_data, as.double)
 
 pupil_data <- data.frame(pupil_data)
 
+
 pupil_data["pupil_timestamp"] <- round(pupil_data$pupil_timestamp)
 pupil_data <- pupil_data %>% filter(diameter < 101)
+
+pup_data_filtered <- pupil_data %>% filter(file_path == 21)
+ggplot(data = pup_data_filtered, aes(x = pupil_timestamp, y = diameter))+
+    geom_smooth(aes())+ geom_point() + theme_minimal()
+
 pupilmean <- pupil_data %>% group_by(file_path, pupil_timestamp) %>% mutate_each(funs(mean)) %>% distinct
 pupilmax <- pupil_data %>% group_by(file_path, pupil_timestamp) %>% mutate_each(funs(max)) %>% distinct
 pupilsd <- pupil_data %>% group_by(file_path, pupil_timestamp) %>% mutate_each(funs(sd)) %>% distinct
@@ -228,6 +234,9 @@ pupiltest <- pupil_data %>% group_by(file_path) %>% distinct(pupil_timestamp)
 pupiltest <- pupiltest %>% left_join(pupilmean, by = c("file_path", "pupil_timestamp"))
 pupiltest <- pupiltest %>% left_join(pupilmax, by = c("file_path", "pupil_timestamp"))
 pupiltest <- pupiltest %>% left_join(pupilsd, by = c("file_path", "pupil_timestamp"))
+
+pup_data_filtered <- pupiltest %>% filter(file_path == 21)
+ggplot(data = pup_data_filtered, aes(x = pupil_timestamp, y = mean_diameter))+ geom_point() + theme_minimal()
 
 rm(pupilmean, pupilmax, pupilsd)
 ```
@@ -441,6 +450,7 @@ for s in range(1, 22):
   
   
 py_physio_Data = test2
+py_scp_time = test2[test2["file_path"] == 21]
 
 py_physio_Data = py_physio_Data.assign(lf = 0)
 py_physio_Data = py_physio_Data.assign(hf = 0)
@@ -547,7 +557,7 @@ write.csv(gamedf, "processed_data.csv", row.names = F)
 corrstuff <- gamedf %>% dplyr::select(-Timestamp, -condition, -file_path)
 corMatMy <- cor(corrstuff)
 corrplot(corMatMy, order = "hclust", tl.cex = 0.6)
-highlyCor <- colnames(gamedf)[findCorrelation(corMatMy, cutoff = 0.6, verbose = TRUE)]
+highlyCor <- colnames(gamedf)[findCorrelation(corMatMy, cutoff = 0.9, verbose = TRUE)]
 gamedf_corr <- gamedf[, which(!colnames(gamedf) %in% highlyCor)]
 ```
 

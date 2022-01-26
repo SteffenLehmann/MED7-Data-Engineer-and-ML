@@ -144,6 +144,7 @@ def pcaanlysis(df):
   df = df.drop(["file_path", "condition"], axis=1)
   pca = decomp.PCA(n_components = 0.90)
   df_pca = pca.fit_transform(df)
+  print(df_pca)
   test = pd.DataFrame(pca.components_, columns = df.columns)
   n_pcs= pca.n_components_
   res = pd.DataFrame(pca.components_, columns = df.columns)

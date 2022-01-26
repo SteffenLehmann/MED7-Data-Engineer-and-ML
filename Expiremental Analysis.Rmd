@@ -36,6 +36,9 @@ library(psycho)
 library("lme4")
 
 library(cowplot)
+library(GGally)
+library(ggExtra)
+
 
 ```
 
@@ -65,13 +68,15 @@ from lazypredict.Supervised import LazyRegressor
 data <- read.csv("processed_data.csv")
 
 summary(lm(SmoothedEDA~ condition, data = data))
+
+
 ```
 
 ```{r aggregate first and last minute of data, include=FALSE}
-heads <- data  %>% group_by(file_path) %>% slice_head(n = 60)
+heads <- data  %>% group_by(file_path) %>% slice_head(n = 60)%>% group_by(file_path) %>% summarise_at(vars(-condition, -Timestamp), funs(mean(., na.rm=TRUE)))
 
 
-tails <- data  %>% group_by(file_path) %>% slice_tail(n = 60)
+tails <- data  %>% group_by(file_path) %>% slice_tail(n = 60) %>% group_by(file_path) %>% summarise_at(vars(-condition, -Timestamp), funs(mean(., na.rm=TRUE)))
 
 
 lmm_data <- rbind(heads, tails)
@@ -82,14 +87,14 @@ lmm_data$condition[(lmm_data$file_path == 21)] <- "VE"
 
 #lmm_data <- lmm_data %>% filter(file_path != c(15, 16,2))
 
-summary(lm(righthandmovement_mean~ Timestamp*condition, data = lmm_data))
+summary(lm(SmoothedEDA~mean_diameter+condition, data = lmm_data))
 
-ggplot(lmm_data, aes(x=condition, y=rmssd)) + geom_point() + geom_smooth(method = "lm")
-
-
+ggplot(tails, aes(x=Timestamp, y=headrot_min)) + geom_point(aes(color=condition))
 
 
-ggplot(lmm_data,aes(x=Timestamp,y=rmssd)) + geom_smooth(method = "lm",level = 0.95) + 
+
+
+ggplot(lmm_data,aes(x=righthanddist_min,y=rmssd)) + geom_smooth(method = "lm",level = 0.95) + 
 geom_point() + facet_wrap(~file_path, nrow = 3, ncol = 7)
 
 ```
@@ -125,13 +130,33 @@ geom_point() + facet_wrap(~file_path, nrow = 3, ncol = 7)
 
 
 ```{r comparing sroke patient, include=FALSE}
-lmm_data %>% filter(file_path != 21) %>% group_by(minute) %>% skim()
-lmm_data %>% filter(file_path == 21) %>% group_by(minute) %>% skim()
+healthy <- data %>% dplyr::filter(file_path != 21) 
+stroke <- data %>% filter(file_path == 21)
+
+stroke$condition <- "patient"
+healthy$condition <- "healthy"
+
+comparedat <- rbind(stroke, healthy)
+
+ggplot(data = comparedat, aes(x = Timestamp, y = rmssd))+
+     geom_smooth(aes(color=condition), method="lm") + geom_line(aes(color=condition), alpha = 0.5) + theme_minimal()
+
+ggplot(data = comparedat, aes(x = Timestamp, y = Hits_mean))+
+     geom_smooth(aes(color=condition), method="lm") + theme_minimal()
+
+ggplot(data = comparedat, aes(x = Timestamp, y = MoleActivatedDuration_mean))+
+     geom_smooth(aes(color=condition), method="lm") + theme_minimal()
+
+single<- data %>% dplyr::filter(file_path == 21) 
+ggplot(data = single, aes(x = Timestamp, y = SmoothedEDA))+
+     geom_smooth(aes(color=condition), method="lm") + theme_minimal() + geom_line()
+ggplot(data = single, aes(x = mean_diameter, y = min_hr))+
+     geom_smooth(aes(color=condition), method="lm") + theme_minimal() + geom_point() + geom_line()
 ```
 
 ```{r comparing sroke patient, include=FALSE}
 data_filtered <- data %>% filter(file_path != 15, file_path != 16, file_path != 15, file_path != 2)
-data_filtered_tailed <- data_filtered  %>% group_by(file_path)# %>% slice_tail(n = 30)
+data_filtered_tailed <- data_filtered  %>% group_by(file_path) %>% slice_tail(n = 30)
 data_filtered_tailed$Condition[(data_filtered_tailed$file_path %% 2) != 0] <- "Mute"
 data_filtered_tailed$Condition[(data_filtered_tailed$file_path %% 2) != 0] <- "Mute"
 data_filtered_tailed$Condition[(data_filtered_tailed$file_path %% 2) == 0] <- "Noisy"
@@ -151,6 +176,88 @@ plot
 
 mergedplot <- plot_grid(plot, plot2, labels = "AUTO")
 save_plot("plot.png", mergedplot, ncol = 2)
+```
+
+```{r comparing sroke patient, include=FALSE}
+data_filtered <- data %>% filter(file_path != 15, file_path != 16, file_path != 15, file_path != 2)
+ggplot(data = data, aes(x = Timestamp, y = IBI))+
+       theme_minimal() + geom_line(method = "lm", aes(color=as.factor(condition)))#+ geom_point(aes(color=as.factor(condition)),alpha = 0.4)
+
+ggplot(data = data, aes(x = Timestamp, y = max_diameter))+
+     geom_point(aes(color=condition)) + theme_minimal()
+
+
+
+ggplot(data = r_scp , aes(x = Timestamp, y = rmssd))+
+    geom_smooth(aes())+ geom_point() + theme_minimal() 
+```
+
+```{r exam plots, include=FALSE}
+
+test_merge <- data %>% group_by(Timestamp) %>% filter(Timestamp == 1)#, Timestamp == 600,)
+test_merge <- rbind(test_merge, filter(data, Timestamp == 300))
+test_merge <- rbind(test_merge, filter(data, Timestamp == 600))
+test_merge<- test_merge %>% filter(file_path != 15, file_path != 16, file_path != 15, file_path != 2)
+ggplot(data = test_merge, aes(x=Timestamp, y=Hits_sum))+ 
+    geom_errorbar(aes(ymin=Hits_sum-sd(Hits_sum), ymax=Hits_sum+sd(Hits_sum)), width=.1, 
+    position=position_dodge(100)) +
+    geom_line() +
+    geom_point(position=position_dodge(100))+
+    labs(title="Plot",x="Time", y = "Average Hits Per Second")+
+    theme_classic()+
+    geom_smooth() #ylim(0,75)+
+```
+
+
+
+
+
+```{r exam plots, include=FALSE}
+ggplot(data = data, aes(x=mean_diameter, y=rmssd, color = condition, shape=condition, linetype=condition))+ 
+    geom_errorbar(aes(ymin=SmoothedEDA-sd(SmoothedEDA), ymax=SmoothedEDA+sd(SmoothedEDA)), width=.1, 
+    position=position_dodge(0.05)) +
+    geom_line() +
+    geom_point()+
+    #labs(title="Plot of lengthby dose",x="Dose (mg)", y = "Length")+
+    theme_classic()+
+    #scale_x_continuous(breaks=seq(0,630,100))+
+    facet_wrap( ~ condition)+
+    geom_smooth()
+
+ggplot(data = data, aes(x=mean_diameter, y=SmoothedEDA, color = condition, shape=condition, linetype=condition))+ 
+    #labs(title="Plot of lengthby dose",x="Dose (mg)", y = "Length")+
+    theme_classic()+
+    #scale_x_continuous(breaks=seq(0,630,100))+
+    geom_smooth(method = "lm")
+ggplot(data = data, aes(x=Timestamp, y=SmoothedEDA, color = condition, shape=condition, linetype=condition))+ 
+    #labs(title="Plot of lengthby dose",x="Dose (mg)", y = "Length")+
+    theme_classic()+
+    #scale_x_continuous(breaks=seq(0,630,100))+
+    geom_smooth(method = "lm")
+
+
+ggplot(data,aes(mean_diameter, SmoothedEDA, color=condition)) +
+  stat_summary(geom = "line", fun.y = mean) +
+  stat_summary(geom = "ribbon", fun.data = mean_cl_normal, alpha = 0.3)+
+    facet_wrap( ~ condition)+
+    theme_classic()
+
+ggplot(data,aes(mean_diameter, SmoothedEDA)) +
+  stat_summary(geom = "line", fun.y = mean) +
+  stat_summary(geom = "ribbon", fun.data = mean_cl_normal, alpha = 0.3)+
+    #facet_wrap( ~ condition)+
+    theme_classic() + ylim(0,1000)
+
+
+p <- ggplot(data, aes(x = Hits_sum, y = rmssd, color = condition, shape=condition, linetype=condition))+
+  stat_smooth(method = "lm")+geom_point(alpha=0) +labs(x="Average Targets Hits Per Second", y = "RMSSD") + ylim(0, 50)
+
+p
+
+ggMarginal(p, type = "density", groupColour = TRUE, groupFill = TRUE)
+
+ggplot(data, aes(x=condition, y=headrot_mean, color=condition)) + geom_violin(alpha=0) + theme_minimal() + geom_boxplot(alpha=0)+labs(x="Condition", y = "Average Head Rotation") + ylim(0, 0.2)
+
 ```
 
 
